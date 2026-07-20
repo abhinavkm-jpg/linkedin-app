@@ -4,10 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { IntegrationsForm } from "@/components/integrations-form";
 import { TeamManager, type Member } from "@/components/team-manager";
 import { CapsEditor } from "@/components/caps-editor";
+import { SchedulesCard } from "@/components/schedules-card";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { users, linkedinAccounts } from "@/db/schema";
 import { getSettingsStatus } from "@/lib/settings";
+import { listSchedules, type ScheduleInfo } from "@/lib/qstash";
 import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +40,15 @@ export default async function SettingsPage() {
     // DB not reachable yet.
   }
 
+  let schedules: ScheduleInfo[] = [];
+  if (isAdmin) {
+    try {
+      schedules = await listSchedules();
+    } catch {
+      // QStash not configured / unreachable.
+    }
+  }
+
   return (
     <>
       <PageHeader title="Settings" description="Integrations, team, and per-account limits." />
@@ -58,6 +69,23 @@ export default async function SettingsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Background schedules */}
+        {isAdmin && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Background schedules</CardTitle>
+              <CardDescription>
+                Runs the send tick and acceptance poll via QStash (no Vercel Pro needed). Set this
+                up once after deploying, with your QStash token saved and APP_URL pointing at your
+                live domain.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SchedulesCard schedules={schedules} />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Webhook / job URLs */}
         <Card>

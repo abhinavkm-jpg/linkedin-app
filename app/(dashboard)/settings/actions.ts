@@ -8,6 +8,7 @@ import { users } from "@/db/schema";
 import { hashPassword } from "@/lib/password";
 import { saveSettings, getSettings, type SettingsInput } from "@/lib/settings";
 import { listAccounts, UnipileError } from "@/lib/unipile/client";
+import { ensureSchedules } from "@/lib/qstash";
 
 async function requireAdmin() {
   const session = await auth();
@@ -36,6 +37,18 @@ export async function testUnipile(): Promise<{ ok: boolean; message: string }> {
   } catch (e) {
     if (e instanceof UnipileError) return { ok: false, message: `Unipile error ${e.status}` };
     return { ok: false, message: e instanceof Error ? e.message : "Test failed" };
+  }
+}
+
+/** Create/refresh the recurring QStash schedules (send tick + acceptance poll). */
+export async function setupSchedules(): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  try {
+    const res = await ensureSchedules();
+    revalidatePath("/settings");
+    return { ok: true, message: `Schedules active: ${res.created.join(", ")}` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Failed to set up schedules" };
   }
 }
 

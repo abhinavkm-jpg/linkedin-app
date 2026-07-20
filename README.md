@@ -72,7 +72,10 @@ sign up becomes the admin and adds teammates from Settings.
 5. In **Unipile**, add a webhook pointing to
    `https://<domain>/api/webhooks/unipile?secret=<the webhook secret you set>`
    (subscribe to account, messaging, and users sources).
-6. `vercel.json` already registers the crons (15-min send tick, 3×/day accept poll).
+6. In the app, go to **Settings → Background schedules → Set up background schedules**.
+   This creates the recurring jobs (15-min send tick, 3×/day acceptance poll) in
+   **QStash** — so it works on Vercel's free Hobby plan (which limits Vercel crons
+   to once per day). Requires `APP_URL` set to your live https domain.
 
 ### Where to get each key
 

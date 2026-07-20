@@ -26,3 +26,60 @@ export async function enqueueJob(
   const client = new Client({ token: qstashToken });
   await client.publishJSON({ url, body, delay: opts.delaySeconds, retries: 3 });
 }
+
+export interface ScheduleInfo {
+  id: string;
+  cron: string;
+  destination: string;
+}
+
+/** The recurring schedules the app needs (QStash replaces Vercel crons). */
+function wantedSchedules(base: string) {
+  return [
+    { path: "send", cron: "*/15 * * * *" }, // process due follow-ups every 15 min
+    { path: "poll-acceptance", cron: "0 9,13,17 * * *" }, // backup accept detection
+  ].map((w) => ({ ...w, destination: `${base}/api/jobs/${w.path}` }));
+}
+
+export async function listSchedules(): Promise<ScheduleInfo[]> {
+  const { qstashToken } = await getSettings();
+  if (!qstashToken) return [];
+  const client = new Client({ token: qstashToken });
+  const items = await client.schedules.list();
+  return items.map((s) => ({ id: s.scheduleId, cron: s.cron, destination: s.destination }));
+}
+
+/**
+ * Create (or refresh) the recurring QStash schedules that drive background work.
+ * Idempotent: existing schedules pointing at our job endpoints are removed first.
+ */
+export async function ensureSchedules(): Promise<{ created: string[] }> {
+  const { qstashToken } = await getSettings();
+  if (!qstashToken) throw new Error("Add your QStash token in Settings first.");
+  const base = env.APP_URL;
+  if (!base.startsWith("https://")) {
+    throw new Error("APP_URL must be your public https domain to create schedules.");
+  }
+
+  const client = new Client({ token: qstashToken });
+  const wanted = wantedSchedules(base);
+
+  const existing = await client.schedules.list();
+  for (const s of existing) {
+    if (wanted.some((w) => s.destination === w.destination)) {
+      await client.schedules.delete(s.scheduleId);
+    }
+  }
+
+  const created: string[] = [];
+  for (const w of wanted) {
+    await client.schedules.create({
+      destination: w.destination,
+      cron: w.cron,
+      body: JSON.stringify({}),
+      headers: { "content-type": "application/json" },
+    });
+    created.push(`${w.path} → ${w.cron}`);
+  }
+  return { created };
+}
