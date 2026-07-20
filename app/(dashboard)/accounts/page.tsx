@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConnectAccountButton } from "@/components/connect-account-button";
+import { ImportAccountsButton } from "@/components/import-accounts-button";
 import { AccountCard } from "@/components/account-card";
 import { getAccountsWithStats } from "@/lib/data";
 
@@ -21,6 +22,7 @@ export default async function AccountsPage() {
         title="Accounts"
         description="Connect LinkedIn accounts via Unipile. Each account has its own daily limits."
       >
+        <ImportAccountsButton />
         <ConnectAccountButton />
       </PageHeader>
       <div className="space-y-6 p-6">

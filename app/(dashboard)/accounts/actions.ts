@@ -6,8 +6,9 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { linkedinAccounts } from "@/db/schema";
 import { env } from "@/lib/env";
-import { createHostedAuthLink, UnipileError } from "@/lib/unipile/client";
+import { createHostedAuthLink, listAccounts, UnipileError } from "@/lib/unipile/client";
 import { enqueueJob } from "@/lib/qstash";
+import type { UnipileSourceStatus } from "@/lib/unipile/types";
 
 async function requireUser() {
   const session = await auth();
@@ -31,6 +32,58 @@ export async function createConnectLink(): Promise<{ url?: string; error?: strin
   } catch (e) {
     if (e instanceof UnipileError) return { error: `Unipile error ${e.status}` };
     return { error: e instanceof Error ? e.message : "Failed to create link" };
+  }
+}
+
+function mapStatus(status?: UnipileSourceStatus): typeof linkedinAccounts.$inferInsert.status {
+  switch (status) {
+    case "OK":
+      return "OK";
+    case "CONNECTING":
+      return "CONNECTING";
+    case "CREDENTIALS":
+      return "CREDENTIALS";
+    case "PERMISSIONS":
+      return "PERMISSIONS";
+    case "STOPPED":
+      return "STOPPED";
+    default:
+      return status ? "ERROR" : "OK";
+  }
+}
+
+/**
+ * Import LinkedIn accounts already connected in the Unipile workspace, so you
+ * don't have to re-run hosted auth for accounts that exist there.
+ */
+export async function importAccountsFromUnipile(): Promise<{ imported: number; error?: string }> {
+  const user = await requireUser();
+  try {
+    const res = await listAccounts({ limit: 250 });
+    const linkedin = res.items.filter((a) => a.type === "LINKEDIN");
+    let imported = 0;
+    for (const a of linkedin) {
+      const status = mapStatus(a.sources?.find((s) => s.status)?.status);
+      await db
+        .insert(linkedinAccounts)
+        .values({
+          unipileAccountId: a.id,
+          name: a.name || a.id,
+          status,
+          ownerUserId: user.id,
+        })
+        .onConflictDoUpdate({
+          target: linkedinAccounts.unipileAccountId,
+          set: { name: a.name || a.id, status },
+        });
+      imported++;
+    }
+    revalidatePath("/accounts");
+    revalidatePath("/");
+    return { imported };
+  } catch (e) {
+    if (e instanceof UnipileError) return { imported: 0, error: `Unipile error ${e.status}` };
+    return { imported: 0, error: e instanceof Error ? e.message : "Import failed" };
   }
 }
 
