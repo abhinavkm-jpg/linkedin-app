@@ -144,6 +144,8 @@ export const linkedinAccounts = pgTable(
     syncCursor: text("sync_cursor"),
     syncedCount: integer("synced_count").notNull().default(0),
     lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    // Earliest time this account may send again (randomized per-send cooldown).
+    nextSendAt: timestamp("next_send_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("linkedin_accounts_owner_idx").on(t.ownerUserId)],

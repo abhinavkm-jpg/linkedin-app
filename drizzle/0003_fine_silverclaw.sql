@@ -1,0 +1,1 @@
+ALTER TABLE "linkedin_accounts" ADD COLUMN "next_send_at" timestamp with time zone;

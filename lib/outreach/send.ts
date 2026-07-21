@@ -30,20 +30,20 @@ export type Enrollment = typeof enrollments.$inferSelect;
  * it or (when the campaign requires AI review) park it as a pending draft.
  * Shared by the send worker and — via `sendStepNow` — the approval flow.
  */
-export async function processEnrollment(enr: Enrollment): Promise<void> {
+export async function processEnrollment(enr: Enrollment): Promise<boolean> {
   const [camp] = await db.select().from(campaigns).where(eq(campaigns.id, enr.campaignId)).limit(1);
   if (!camp) {
     await db
       .update(enrollments)
       .set({ state: "failed", lastError: "Campaign missing", updatedAt: new Date() })
       .where(eq(enrollments.id, enr.id));
-    return;
+    return false;
   }
   // Only active campaigns send. For anything else (draft/paused/archived), release
   // the claim back to queued and hold — never complete.
   if (camp.status !== "active") {
     await db.update(enrollments).set({ state: "queued", nextRunAt: hold() }).where(eq(enrollments.id, enr.id));
-    return;
+    return false;
   }
 
   const steps = await db
@@ -56,13 +56,13 @@ export async function processEnrollment(enr: Enrollment): Promise<void> {
   // sent" bug: 0 steps made `currentStep >= steps.length` true immediately).
   if (steps.length === 0) {
     await db.update(enrollments).set({ state: "queued", nextRunAt: hold() }).where(eq(enrollments.id, enr.id));
-    return;
+    return false;
   }
 
   // Genuinely finished the whole sequence.
   if (enr.currentStep >= steps.length) {
     await db.update(enrollments).set({ state: "completed" }).where(eq(enrollments.id, enr.id));
-    return;
+    return false;
   }
 
   const step = steps[enr.currentStep];
@@ -85,7 +85,7 @@ export async function processEnrollment(enr: Enrollment): Promise<void> {
           .update(enrollments)
           .set({ state: "queued", nextRunAt: tomorrow(), updatedAt: new Date() })
           .where(eq(enrollments.id, enr.id));
-        return;
+        return false;
       }
       try {
         conn = await enrichConnection(conn, account);
@@ -95,7 +95,7 @@ export async function processEnrollment(enr: Enrollment): Promise<void> {
             .update(enrollments)
             .set({ state: "queued", nextRunAt: tomorrow(), updatedAt: new Date() })
             .where(eq(enrollments.id, enr.id));
-          return;
+          return false;
         }
         // Can't enrich this profile (e.g. 404) — skip and move to the next.
         await db.update(connections).set({ enrichedAt: new Date() }).where(eq(connections.id, conn.id));
@@ -103,7 +103,7 @@ export async function processEnrollment(enr: Enrollment): Promise<void> {
           .update(enrollments)
           .set({ state: "skipped", lastError: "Enrichment failed", updatedAt: new Date() })
           .where(eq(enrollments.id, enr.id));
-        return;
+        return false;
       }
     }
     if (!connectionMatchesIcp(conn, camp.targeting)) {
@@ -111,7 +111,7 @@ export async function processEnrollment(enr: Enrollment): Promise<void> {
         .update(enrollments)
         .set({ state: "skipped", lastError: "ICP mismatch after enrichment", updatedAt: new Date() })
         .where(eq(enrollments.id, enr.id));
-      return;
+      return false;
     }
   }
 
@@ -121,7 +121,7 @@ export async function processEnrollment(enr: Enrollment): Promise<void> {
       .update(enrollments)
       .set({ state: "queued", nextRunAt: tomorrow(), updatedAt: new Date() })
       .where(eq(enrollments.id, enr.id));
-    return;
+    return false;
   }
 
   const text = await resolveStepText(step, steps, camp, conn);
@@ -141,10 +141,10 @@ export async function processEnrollment(enr: Enrollment): Promise<void> {
       .update(enrollments)
       .set({ state: "paused", lastError: "Awaiting review", updatedAt: new Date() })
       .where(eq(enrollments.id, enr.id));
-    return;
+    return false;
   }
 
-  await sendStepNow({ enr, step, steps, camp, conn, account, text });
+  return sendStepNow({ enr, step, steps, camp, conn, account, text });
 }
 
 /** Send the current step immediately (bypasses the review gate). */
@@ -156,12 +156,11 @@ export async function sendStepNow(ctx: {
   conn: Connection;
   account: LinkedinAccount;
   text: string;
-}): Promise<void> {
+}): Promise<boolean> {
   if (ctx.step.type === "invite") {
-    await doInvite(ctx.enr, ctx.step, ctx.camp, ctx.conn, ctx.account, ctx.text);
-  } else {
-    await doMessage(ctx.enr, ctx.steps, ctx.camp, ctx.conn, ctx.account, ctx.text);
+    return doInvite(ctx.enr, ctx.step, ctx.camp, ctx.conn, ctx.account, ctx.text);
   }
+  return doMessage(ctx.enr, ctx.steps, ctx.camp, ctx.conn, ctx.account, ctx.text);
 }
 
 async function doInvite(
@@ -171,7 +170,7 @@ async function doInvite(
   conn: Connection,
   account: LinkedinAccount,
   text: string,
-) {
+): Promise<boolean> {
   const providerId = await ensureProviderId(conn, account);
   if (!providerId) throw new Error("Could not resolve provider id for invite");
 
@@ -197,20 +196,21 @@ async function doInvite(
       .update(enrollments)
       .set({ currentStep: enr.currentStep + 1, state: "awaiting_accept", nextRunAt: null, updatedAt: new Date() })
       .where(eq(enrollments.id, enr.id));
+    return true;
   } catch (e) {
     if (e instanceof UnipileError && e.isCannotResendYet) {
       await db
         .update(enrollments)
         .set({ currentStep: enr.currentStep + 1, state: "accepted", nextRunAt: new Date(), updatedAt: new Date() })
         .where(eq(enrollments.id, enr.id));
-      return;
+      return false;
     }
     if (e instanceof UnipileError && e.isRateLimited) {
       await db
         .update(enrollments)
         .set({ state: "queued", nextRunAt: tomorrow() })
         .where(eq(enrollments.id, enr.id));
-      return;
+      return false;
     }
     throw e;
   }
@@ -223,7 +223,7 @@ async function doMessage(
   conn: Connection,
   account: LinkedinAccount,
   text: string,
-) {
+): Promise<boolean> {
   if (!text.trim()) throw new Error("Empty message body");
 
   const existing = (await db.select().from(chats).where(eq(chats.connectionId, conn.id)).limit(1))[0];
@@ -271,13 +271,14 @@ async function doMessage(
     await db.update(connections).set({ relationshipStatus: "messaged" }).where(eq(connections.id, conn.id));
 
     await advanceAfterMessage(enr, steps);
+    return true;
   } catch (e) {
     if (e instanceof UnipileError && e.isRateLimited) {
       await db
         .update(enrollments)
         .set({ state: "queued", nextRunAt: tomorrow() })
         .where(eq(enrollments.id, enr.id));
-      return;
+      return false;
     }
     throw e;
   }

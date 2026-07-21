@@ -124,15 +124,21 @@ export async function incrementCounter(
 }
 
 /**
- * Human-like spacing between consecutive sends. Unipile explicitly warns
- * against fixed intervals; we randomize within a working-hours-friendly window.
+ * Human-like spacing between consecutive sends from the same account. Unipile
+ * warns against fixed intervals, so we pace one send per account every random
+ * 2–10 minutes.
  */
-export function randomSpacingMs(minSeconds = 45, maxSeconds = 210): number {
-  const jitter = Math.floor(Math.random() * (maxSeconds - minSeconds + 1)) + minSeconds;
-  return jitter * 1000;
+export const SEND_GAP_MIN_SECONDS = 120;
+export const SEND_GAP_MAX_SECONDS = 600;
+
+export function randomSendGapSeconds(
+  min = SEND_GAP_MIN_SECONDS,
+  max = SEND_GAP_MAX_SECONDS,
+): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-/** Timestamp `randomSpacingMs` in the future, for enrollment.nextRunAt. */
-export function nextSpacedRunAt(): Date {
-  return new Date(Date.now() + randomSpacingMs());
+/** A timestamp `randomSendGapSeconds` in the future — the account's next-send cooldown. */
+export function nextSendCooldown(): Date {
+  return new Date(Date.now() + randomSendGapSeconds() * 1000);
 }

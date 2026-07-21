@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq, inArray, lt, lte, isNull, or } from "drizzle-orm";
+import { and, asc, count, eq, inArray, lt, lte, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import { enrollments, campaigns } from "@/db/schema";
+import { enrollments, campaigns, linkedinAccounts } from "@/db/schema";
 import { readJob } from "@/lib/jobs";
 import { enqueueJob } from "@/lib/qstash";
 import { processEnrollment } from "@/lib/outreach/send";
+import { randomSendGapSeconds } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const BATCH = 8;
+const BATCH = 12;
 // Resting states eligible for sending. `messaging` is the transient "claimed /
 // in-flight" state used to prevent concurrent workers double-sending.
 const DUE_STATES = ["queued", "accepted", "in_followup"] as const;
@@ -37,26 +38,36 @@ export async function POST(req: Request) {
     ? eq(enrollments.campaignId, job.body.campaignId)
     : undefined;
 
-  // Only process enrollments whose campaign is ACTIVE — never draft/paused.
+  const dueClause = and(
+    eq(campaigns.status, "active"),
+    inArray(enrollments.state, [...DUE_STATES]),
+    or(isNull(enrollments.nextRunAt), lte(enrollments.nextRunAt, now)),
+    campaignFilter,
+  );
+
+  // Candidates from ACTIVE campaigns, with their account's send cooldown.
   const candidates = await db
-    .select({ id: enrollments.id })
+    .select({
+      id: enrollments.id,
+      accountId: enrollments.accountId,
+      nextSendAt: linkedinAccounts.nextSendAt,
+    })
     .from(enrollments)
     .innerJoin(campaigns, eq(campaigns.id, enrollments.campaignId))
-    .where(
-      and(
-        eq(campaigns.status, "active"),
-        inArray(enrollments.state, [...DUE_STATES]),
-        or(isNull(enrollments.nextRunAt), lte(enrollments.nextRunAt, now)),
-        campaignFilter,
-      ),
-    )
+    .innerJoin(linkedinAccounts, eq(linkedinAccounts.id, enrollments.accountId))
+    .where(dueClause)
     .orderBy(asc(enrollments.nextRunAt))
     .limit(BATCH);
 
-  let processed = 0;
+  let sent = 0;
+  // At most one real send per account per run; skip accounts on cooldown.
+  const sentAccounts = new Set<string>();
+
   for (const cand of candidates) {
-    // Atomic claim: flip to `messaging` only if still due. A single UPDATE is
-    // atomic per row, so only one concurrent worker wins each enrollment.
+    if (sentAccounts.has(cand.accountId)) continue;
+    if (cand.nextSendAt && cand.nextSendAt > now) continue; // account cooling down
+
+    // Atomic claim (single UPDATE) so concurrent workers can't double-process.
     const claimed = await db
       .update(enrollments)
       .set({ state: "messaging", updatedAt: new Date() })
@@ -69,11 +80,11 @@ export async function POST(req: Request) {
       )
       .returning();
     const enr = claimed[0];
-    if (!enr) continue; // lost the race to another worker
+    if (!enr) continue; // lost the race
 
+    let didSend = false;
     try {
-      await processEnrollment(enr);
-      processed++;
+      didSend = await processEnrollment(enr);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       await db
@@ -82,13 +93,31 @@ export async function POST(req: Request) {
         .where(eq(enrollments.id, enr.id));
       console.error("[send] enrollment failed", enr.id, msg);
     }
+
+    // Only a real send starts the account's cooldown and consumes its slot.
+    if (didSend) {
+      sent++;
+      sentAccounts.add(cand.accountId);
+      await db
+        .update(linkedinAccounts)
+        .set({ nextSendAt: new Date(Date.now() + randomSendGapSeconds() * 1000) })
+        .where(eq(linkedinAccounts.id, cand.accountId));
+    }
   }
 
-  if (candidates.length === BATCH) {
+  // If any due work remains, re-check after a random 2–10 min gap (the 15-min
+  // cron is the backstop). This paces sends instead of bursting them.
+  const [{ remaining }] = await db
+    .select({ remaining: count() })
+    .from(enrollments)
+    .innerJoin(campaigns, eq(campaigns.id, enrollments.campaignId))
+    .where(dueClause);
+
+  if (Number(remaining) > 0) {
     await enqueueJob("send", job.body.campaignId ? { campaignId: job.body.campaignId } : {}, {
-      delaySeconds: 30,
+      delaySeconds: randomSendGapSeconds(),
     });
   }
 
-  return NextResponse.json({ ok: true, processed });
+  return NextResponse.json({ ok: true, sent, remaining: Number(remaining) });
 }
