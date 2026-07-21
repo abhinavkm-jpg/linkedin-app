@@ -4,6 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { InboxList, type InboxRow } from "@/components/inbox-list";
 import { db } from "@/db";
 import { chats, linkedinAccounts } from "@/db/schema";
+import { auth } from "@/auth";
+import { getAccessibleAccountIds, accountScope } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +14,8 @@ export default async function InboxPage() {
   let error: string | null = null;
 
   try {
+    const session = await auth();
+    const accessibleIds = await getAccessibleAccountIds(session!.user);
     const data = await db
       .select({
         id: chats.id,
@@ -23,6 +27,7 @@ export default async function InboxPage() {
       })
       .from(chats)
       .leftJoin(linkedinAccounts, eq(chats.accountId, linkedinAccounts.id))
+      .where(accountScope(chats.accountId, accessibleIds))
       .orderBy(desc(chats.lastMessageAt))
       .limit(200);
 

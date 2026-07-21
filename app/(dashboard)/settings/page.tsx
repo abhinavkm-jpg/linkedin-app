@@ -126,35 +126,37 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Per-account limits */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Per-account daily limits</CardTitle>
-            <CardDescription>
-              LinkedIn has no quota API — these caps are enforced by the app to keep accounts safe.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {accounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No accounts connected.</p>
-            ) : (
-              accounts.map((a) => (
-                <div key={a.id} className="space-y-2">
-                  <p className="text-sm font-medium">{a.name}</p>
-                  <CapsEditor
-                    accountId={a.id}
-                    initial={{
-                      dailyInviteCap: a.dailyInviteCap,
-                      dailyMessageCap: a.dailyMessageCap,
-                      dailyInmailCap: a.dailyInmailCap,
-                      dailyEnrichCap: a.dailyEnrichCap,
-                    }}
-                  />
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+        {/* Per-account limits (admin) */}
+        {isAdmin && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Per-account daily limits</CardTitle>
+              <CardDescription>
+                LinkedIn has no quota API — these caps are enforced by the app to keep accounts safe.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {accounts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No accounts connected.</p>
+              ) : (
+                accounts.map((a) => (
+                  <div key={a.id} className="space-y-2">
+                    <p className="text-sm font-medium">{a.name}</p>
+                    <CapsEditor
+                      accountId={a.id}
+                      initial={{
+                        dailyInviteCap: a.dailyInviteCap,
+                        dailyMessageCap: a.dailyMessageCap,
+                        dailyInmailCap: a.dailyInmailCap,
+                        dailyEnrichCap: a.dailyEnrichCap,
+                      }}
+                    />
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </>
   );

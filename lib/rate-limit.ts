@@ -5,6 +5,9 @@ import { dailyCounters, linkedinAccounts } from "@/db/schema";
 
 export type SendKind = "invite" | "message" | "inmail" | "enrich";
 
+/** Workspace-wide daily ceiling on profile-enrichment API calls. */
+export const GLOBAL_DAILY_ENRICH_CAP = 200;
+
 const COLUMN: Record<SendKind, "invitesSent" | "messagesSent" | "inmailsSent" | "enrichments"> =
   {
     invite: "invitesSent",
@@ -78,6 +81,24 @@ export async function getQuotaStatus(
 export async function canSend(accountId: string, kind: SendKind): Promise<boolean> {
   const status = await getQuotaStatus(accountId);
   return status[kind].remaining > 0;
+}
+
+/** Total enrichment API calls used today across all accounts (workspace-wide). */
+export async function enrichmentsToday(day = todayStr()): Promise<number> {
+  const rows = await db
+    .select({ total: sql<number>`coalesce(sum(${dailyCounters.enrichments}), 0)::int` })
+    .from(dailyCounters)
+    .where(eq(dailyCounters.day, day));
+  return Number(rows[0]?.total ?? 0);
+}
+
+/**
+ * Whether we may enrich right now: under the per-account daily cap AND under
+ * the workspace-wide global cap (200/day). Used to gate send-time enrichment.
+ */
+export async function canEnrichNow(accountId: string): Promise<boolean> {
+  if (!(await canSend(accountId, "enrich"))) return false;
+  return (await enrichmentsToday()) < GLOBAL_DAILY_ENRICH_CAP;
 }
 
 /**

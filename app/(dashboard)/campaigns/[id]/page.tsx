@@ -12,6 +12,8 @@ import { ReviewQueue } from "@/components/review-queue";
 import { db } from "@/db";
 import { campaigns, sequenceSteps, templates, aiPrompts, enrollments, connections, activities } from "@/db/schema";
 import { getIcpMatches } from "@/lib/data-connections";
+import { auth } from "@/auth";
+import { getAccessibleAccountIds } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,11 @@ export default async function CampaignDetailPage({
 
   const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, id)).limit(1);
   if (!campaign) notFound();
+
+  // Members can only view campaigns on accounts assigned to them.
+  const session = await auth();
+  const accessibleIds = await getAccessibleAccountIds(session!.user);
+  if (accessibleIds !== null && !accessibleIds.includes(campaign.accountId)) notFound();
 
   const [steps, tpls, prompts, stateCounts, enrolled, drafts] = await Promise.all([
     db.select().from(sequenceSteps).where(eq(sequenceSteps.campaignId, id)).orderBy(asc(sequenceSteps.stepOrder)),

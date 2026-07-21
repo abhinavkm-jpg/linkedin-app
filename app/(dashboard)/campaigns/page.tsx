@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { CampaignCreateDialog } from "@/components/campaign-create-dialog";
 import { db } from "@/db";
 import { campaigns, linkedinAccounts, enrollments } from "@/db/schema";
+import { auth } from "@/auth";
+import { getAccessibleAccountIds, accountScope } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -29,9 +31,13 @@ export default async function CampaignsPage() {
   let error: string | null = null;
 
   try {
+    const session = await auth();
+    const accessibleIds = await getAccessibleAccountIds(session!.user);
+
     accounts = await db
       .select({ id: linkedinAccounts.id, name: linkedinAccounts.name })
       .from(linkedinAccounts)
+      .where(accountScope(linkedinAccounts.id, accessibleIds))
       .orderBy(desc(linkedinAccounts.createdAt));
 
     const camps = await db
@@ -43,6 +49,7 @@ export default async function CampaignsPage() {
       })
       .from(campaigns)
       .leftJoin(linkedinAccounts, eq(campaigns.accountId, linkedinAccounts.id))
+      .where(accountScope(campaigns.accountId, accessibleIds))
       .orderBy(desc(campaigns.createdAt));
 
     const counts = await db

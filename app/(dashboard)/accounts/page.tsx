@@ -4,14 +4,28 @@ import { ConnectAccountButton } from "@/components/connect-account-button";
 import { ImportAccountsButton } from "@/components/import-accounts-button";
 import { AccountCard } from "@/components/account-card";
 import { getAccountsWithStats } from "@/lib/data";
+import { auth } from "@/auth";
+import { isAdmin } from "@/lib/access";
+import { db } from "@/db";
+import { users } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountsPage() {
+  const session = await auth();
+  const user = session!.user;
+  const admin = isAdmin(user);
+
   let accounts: Awaited<ReturnType<typeof getAccountsWithStats>> = [];
+  let members: { id: string; name: string | null; email: string }[] = [];
   let error: string | null = null;
   try {
-    accounts = await getAccountsWithStats();
+    accounts = await getAccountsWithStats(user);
+    if (admin) {
+      members = await db
+        .select({ id: users.id, name: users.name, email: users.email })
+        .from(users);
+    }
   } catch (e) {
     error = e instanceof Error ? e.message : "Failed to load accounts";
   }
@@ -20,9 +34,13 @@ export default async function AccountsPage() {
     <>
       <PageHeader
         title="Accounts"
-        description="Connect LinkedIn accounts via Unipile. Each account has its own daily limits."
+        description={
+          admin
+            ? "All connected LinkedIn accounts. Sync from Unipile and assign each to a team member."
+            : "LinkedIn accounts assigned to you. Connect your own via Unipile."
+        }
       >
-        <ImportAccountsButton />
+        {admin && <ImportAccountsButton />}
         <ConnectAccountButton />
       </PageHeader>
       <div className="space-y-6 p-6">
@@ -36,15 +54,17 @@ export default async function AccountsPage() {
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
               <p className="text-sm text-muted-foreground">
-                No accounts yet. Connect a LinkedIn account to start syncing connections.
+                {admin
+                  ? "No accounts yet. Import the LinkedIn accounts connected in your Unipile workspace."
+                  : "No accounts assigned to you yet. Connect your own LinkedIn account, or ask an admin to assign one."}
               </p>
-              <ConnectAccountButton />
+              {admin ? <ImportAccountsButton /> : <ConnectAccountButton />}
             </CardContent>
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {accounts.map((a) => (
-              <AccountCard key={a.id} account={a} />
+              <AccountCard key={a.id} account={a} isAdmin={admin} members={members} />
             ))}
           </div>
         )}

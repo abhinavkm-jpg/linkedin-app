@@ -7,16 +7,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getAccountsWithStats, getDashboardStats } from "@/lib/data";
 import { accountStatusTone } from "@/lib/status";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  const session = await auth();
+  const user = session!.user;
+
   let data: Awaited<ReturnType<typeof getAccountsWithStats>> = [];
   let stats: Awaited<ReturnType<typeof getDashboardStats>> | null = null;
   let error: string | null = null;
 
   try {
-    [data, stats] = await Promise.all([getAccountsWithStats(), getDashboardStats()]);
+    [data, stats] = await Promise.all([getAccountsWithStats(user), getDashboardStats(user)]);
   } catch (e) {
     error = e instanceof Error ? e.message : "Failed to load data";
   }

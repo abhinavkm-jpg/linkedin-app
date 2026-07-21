@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm";
 import { db } from "@/db";
 import { connections, enrollments, type Connection, type CampaignTargeting } from "@/db/schema";
+import { accountScope } from "@/lib/access";
 
 export interface ConnectionFilters {
   accountId?: string;
@@ -52,10 +53,16 @@ function buildWhere(f: ConnectionFilters): SQL | undefined {
   return clauses.length ? and(...clauses) : undefined;
 }
 
-export async function getConnections(f: ConnectionFilters): Promise<ConnectionsResult> {
+export async function getConnections(
+  f: ConnectionFilters,
+  accessibleIds: string[] | null = null,
+): Promise<ConnectionsResult> {
   const page = Math.max(1, f.page ?? 1);
   const pageSize = Math.min(200, Math.max(10, f.pageSize ?? 50));
-  const where = buildWhere(f);
+  const base = buildWhere(f);
+  const scope = accountScope(connections.accountId, accessibleIds);
+  const parts = [base, scope].filter(Boolean) as SQL[];
+  const where = parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : and(...parts);
 
   const [rows, [{ total }]] = await Promise.all([
     db
@@ -138,10 +145,14 @@ export async function getIcpMatches(
 }
 
 /** Distinct country codes present, for the filter dropdown. */
-export async function getConnectionCountries(): Promise<string[]> {
+export async function getConnectionCountries(accessibleIds: string[] | null = null): Promise<string[]> {
+  const scope = accountScope(connections.accountId, accessibleIds);
+  const where = scope
+    ? and(sql`${connections.locationCountry} is not null`, scope)
+    : sql`${connections.locationCountry} is not null`;
   const rows = await db
     .selectDistinct({ country: connections.locationCountry })
     .from(connections)
-    .where(sql`${connections.locationCountry} is not null`);
+    .where(where);
   return rows.map((r) => r.country!).filter(Boolean).sort();
 }

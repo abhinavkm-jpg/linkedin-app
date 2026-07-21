@@ -8,12 +8,19 @@ import { linkedinAccounts } from "@/db/schema";
 import { env } from "@/lib/env";
 import { createHostedAuthLink, listAccounts, UnipileError } from "@/lib/unipile/client";
 import { enqueueJob } from "@/lib/qstash";
+import { assertAdmin } from "@/lib/access";
 import type { UnipileSourceStatus } from "@/lib/unipile/types";
 
 async function requireUser() {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Not authenticated");
   return session.user;
+}
+
+async function requireAdmin() {
+  const user = await requireUser();
+  assertAdmin(user);
+  return user;
 }
 
 /** Create a Unipile hosted-auth link the user opens to connect a LinkedIn account. */
@@ -57,7 +64,7 @@ function mapStatus(status?: UnipileSourceStatus): typeof linkedinAccounts.$infer
  * don't have to re-run hosted auth for accounts that exist there.
  */
 export async function importAccountsFromUnipile(): Promise<{ imported: number; error?: string }> {
-  const user = await requireUser();
+  const user = await requireAdmin();
   try {
     const res = await listAccounts({ limit: 250 });
     const linkedin = res.items.filter((a) => a.type === "LINKEDIN");
@@ -96,15 +103,15 @@ export async function updateAccountCaps(
     dailyEnrichCap?: number;
   },
 ): Promise<void> {
-  await requireUser();
+  await requireAdmin();
   await db.update(linkedinAccounts).set(caps).where(eq(linkedinAccounts.id, accountId));
   revalidatePath("/accounts");
   revalidatePath("/");
 }
 
-/** Kick off a full connection sync for an account (chunked via QStash). */
+/** Kick off a full connection sync for an account (chunked via QStash). Admin only. */
 export async function startSync(accountId: string): Promise<void> {
-  await requireUser();
+  await requireAdmin();
   await db
     .update(linkedinAccounts)
     .set({ syncStatus: "running", syncCursor: null })
@@ -113,9 +120,22 @@ export async function startSync(accountId: string): Promise<void> {
   revalidatePath("/accounts");
 }
 
+/** Assign (or clear) the member who owns an account. Admin only. */
+export async function assignAccountOwner(
+  accountId: string,
+  userId: string | null,
+): Promise<void> {
+  await requireAdmin();
+  await db
+    .update(linkedinAccounts)
+    .set({ ownerUserId: userId })
+    .where(eq(linkedinAccounts.id, accountId));
+  revalidatePath("/accounts");
+  revalidatePath("/");
+}
+
 export async function removeAccount(accountId: string): Promise<void> {
-  const user = await requireUser();
-  if (user.role !== "admin") throw new Error("Only admins can remove accounts");
+  await requireAdmin();
   await db.delete(linkedinAccounts).where(eq(linkedinAccounts.id, accountId));
   revalidatePath("/accounts");
   revalidatePath("/");

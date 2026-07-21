@@ -7,12 +7,21 @@ import { RefreshCw, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { QuotaGauge } from "@/components/quota-gauge";
 import { accountStatusTone } from "@/lib/status";
-import { startSync } from "@/app/(dashboard)/accounts/actions";
+import { startSync, assignAccountOwner } from "@/app/(dashboard)/accounts/actions";
 import type { AccountWithStats } from "@/lib/data";
 
-export function AccountCard({ account }: { account: AccountWithStats }) {
+export function AccountCard({
+  account,
+  isAdmin,
+  members,
+}: {
+  account: AccountWithStats;
+  isAdmin: boolean;
+  members: { id: string; name: string | null; email: string }[];
+}) {
   const [pending, start] = useTransition();
 
   function sync() {
@@ -22,6 +31,17 @@ export function AccountCard({ account }: { account: AccountWithStats }) {
         toast.success("Sync started. Connections will populate as it runs.");
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to start sync");
+      }
+    });
+  }
+
+  function assign(userId: string) {
+    start(async () => {
+      try {
+        await assignAccountOwner(account.id, userId || null);
+        toast.success("Owner updated");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to assign");
       }
     });
   }
@@ -47,21 +67,43 @@ export function AccountCard({ account }: { account: AccountWithStats }) {
           <QuotaGauge label="InMail / day" used={account.quotas.inmail.used} cap={account.quotas.inmail.cap} />
           <QuotaGauge label="Enrichments / day" used={account.quotas.enrich.used} cap={account.quotas.enrich.cap} />
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={sync}
-            disabled={pending || account.syncStatus === "running"}
-          >
-            {pending || account.syncStatus === "running" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            {account.syncStatus === "running" ? "Syncing…" : "Sync connections"}
-          </Button>
-        </div>
+
+        {isAdmin && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Assigned to</Label>
+            <select
+              className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+              value={account.ownerUserId ?? ""}
+              onChange={(e) => assign(e.target.value)}
+              disabled={pending}
+            >
+              <option value="">Unassigned</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name ?? m.email}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={sync}
+              disabled={pending || account.syncStatus === "running"}
+            >
+              {pending || account.syncStatus === "running" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {account.syncStatus === "running" ? "Syncing…" : "Sync connections"}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

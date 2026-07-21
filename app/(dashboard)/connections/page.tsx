@@ -5,6 +5,8 @@ import { ConnectionsBrowser } from "@/components/connections-browser";
 import { db } from "@/db";
 import { linkedinAccounts, campaigns } from "@/db/schema";
 import { getConnections, getConnectionCountries } from "@/lib/data-connections";
+import { auth } from "@/auth";
+import { getAccessibleAccountIds, accountScope } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -31,16 +33,20 @@ export default async function ConnectionsPage({
   let error: string | null = null;
 
   try {
+    const session = await auth();
+    const accessibleIds = await getAccessibleAccountIds(session!.user);
     const [result, accounts, countries, camps] = await Promise.all([
-      getConnections(filters),
+      getConnections(filters, accessibleIds),
       db
         .select({ id: linkedinAccounts.id, name: linkedinAccounts.name })
         .from(linkedinAccounts)
+        .where(accountScope(linkedinAccounts.id, accessibleIds))
         .orderBy(desc(linkedinAccounts.createdAt)),
-      getConnectionCountries(),
+      getConnectionCountries(accessibleIds),
       db
         .select({ id: campaigns.id, name: campaigns.name, accountId: campaigns.accountId })
         .from(campaigns)
+        .where(accountScope(campaigns.accountId, accessibleIds))
         .orderBy(desc(campaigns.createdAt)),
     ]);
     data = { result, accounts, countries, camps };

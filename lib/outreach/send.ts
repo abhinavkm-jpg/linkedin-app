@@ -16,10 +16,12 @@ import {
   type Connection,
   type LinkedinAccount,
 } from "@/db/schema";
-import { canSend, incrementCounter } from "@/lib/rate-limit";
+import { canSend, canEnrichNow, incrementCounter } from "@/lib/rate-limit";
 import { sendInvitation, startChat, sendMessage, getProfile, UnipileError } from "@/lib/unipile/client";
 import { renderTemplate, templateVarsFromConnection } from "@/lib/templates";
 import { generateMessage, type OutreachStep, type ProspectContext } from "@/lib/ai/generate";
+import { pickLatestJob, connectionMatchesIcp, hasIcp } from "@/lib/icp";
+import type { ConnectionEnrichment } from "@/db/schema";
 
 export type Enrollment = typeof enrollments.$inferSelect;
 
@@ -47,13 +49,54 @@ export async function processEnrollment(enr: Enrollment): Promise<void> {
   }
 
   const step = steps[enr.currentStep];
-  const [conn] = await db.select().from(connections).where(eq(connections.id, enr.connectionId)).limit(1);
+  const rows = await db.select().from(connections).where(eq(connections.id, enr.connectionId)).limit(1);
+  let conn = rows[0];
   const [account] = await db
     .select()
     .from(linkedinAccounts)
     .where(eq(linkedinAccounts.id, enr.accountId))
     .limit(1);
   if (!conn || !account) throw new Error("Missing connection or account");
+
+  // Stage-2 ICP: when the campaign has an ICP, enrich this connection now (once)
+  // and re-check the ICP against the enriched job/company/country before sending.
+  if (hasIcp(camp.targeting)) {
+    if (!conn.enrichedAt) {
+      if (!(await canEnrichNow(account.id))) {
+        // Daily enrichment budget exhausted — try again tomorrow.
+        await db
+          .update(enrollments)
+          .set({ nextRunAt: tomorrow(), updatedAt: new Date() })
+          .where(eq(enrollments.id, enr.id));
+        return;
+      }
+      try {
+        conn = await enrichConnection(conn, account);
+      } catch (e) {
+        if (e instanceof UnipileError && e.isRateLimited) {
+          await db
+            .update(enrollments)
+            .set({ nextRunAt: tomorrow(), updatedAt: new Date() })
+            .where(eq(enrollments.id, enr.id));
+          return;
+        }
+        // Can't enrich this profile (e.g. 404) — skip and move to the next.
+        await db.update(connections).set({ enrichedAt: new Date() }).where(eq(connections.id, conn.id));
+        await db
+          .update(enrollments)
+          .set({ state: "skipped", lastError: "Enrichment failed", updatedAt: new Date() })
+          .where(eq(enrollments.id, enr.id));
+        return;
+      }
+    }
+    if (!connectionMatchesIcp(conn, camp.targeting)) {
+      await db
+        .update(enrollments)
+        .set({ state: "skipped", lastError: "ICP mismatch after enrichment", updatedAt: new Date() })
+        .where(eq(enrollments.id, enr.id));
+      return;
+    }
+  }
 
   const kind = step.type === "invite" ? "invite" : "message";
   if (!(await canSend(account.id, kind))) {
@@ -277,6 +320,48 @@ function aiStepLabel(step: SequenceStep, steps: SequenceStep[]): OutreachStep {
   const messageSteps = steps.filter((s) => s.type === "message");
   const idx = messageSteps.findIndex((s) => s.id === step.id);
   return (["welcome", "follow_up_1", "follow_up_2", "follow_up_3"][idx] ?? "follow_up_3") as OutreachStep;
+}
+
+/**
+ * Enrich a connection via the profile API (experience + about) and persist the
+ * current role, company, summary, country, and provider id. Throws on API
+ * error so callers can distinguish rate-limits from other failures.
+ */
+async function enrichConnection(conn: Connection, account: LinkedinAccount): Promise<Connection> {
+  const identifier = conn.publicIdentifier || conn.providerId || conn.memberId;
+  if (!identifier) return conn;
+
+  const profile = await getProfile(identifier, {
+    accountId: account.unipileAccountId,
+    sections: ["experience", "about"],
+    notify: false,
+  });
+  await incrementCounter(account.id, "enrich");
+
+  const { position, company } = pickLatestJob(profile.work_experience ?? []);
+  const enrichment: ConnectionEnrichment = {
+    summary: profile.summary ?? null,
+    workExperience: (profile.work_experience ?? []).slice(0, 6).map((e) => ({
+      position: e.position ?? null,
+      company: e.company ?? null,
+      current: e.current ?? null,
+    })),
+  };
+
+  const [updated] = await db
+    .update(connections)
+    .set({
+      providerId: profile.provider_id ?? conn.providerId,
+      company: company ?? conn.company,
+      position: position ?? conn.position,
+      locationCountry: profile.primary_locale?.country ?? conn.locationCountry,
+      enrichment,
+      enrichedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(connections.id, conn.id))
+    .returning();
+  return updated ?? conn;
 }
 
 async function ensureProviderId(conn: Connection, account: LinkedinAccount): Promise<string | null> {
