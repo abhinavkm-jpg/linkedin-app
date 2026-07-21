@@ -22,7 +22,7 @@ export default async function LoginPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-6">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-50 via-background to-violet-50" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-50 via-background to-violet-50 dark:from-blue-950/30 dark:via-background dark:to-violet-950/30" />
       <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
       <Card className="relative w-full max-w-sm shadow-xl">
         <CardHeader className="space-y-2 text-center">

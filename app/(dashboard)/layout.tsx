@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { Nav } from "@/components/nav";
 import { UserMenu } from "@/components/user-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function DashboardLayout({
   children,
@@ -21,6 +22,9 @@ export default async function DashboardLayout({
           <div className="flex flex-col leading-none">
             <span className="font-semibold tracking-tight">Outreach</span>
             <span className="text-[10px] text-muted-foreground">LinkedIn engine</span>
+          </div>
+          <div className="ml-auto">
+            <ThemeToggle />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
