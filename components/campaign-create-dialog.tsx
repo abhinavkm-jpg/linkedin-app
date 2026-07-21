@@ -24,7 +24,7 @@ export function CampaignCreateDialog({
   const [pending, start] = useTransition();
   const [name, setName] = useState("");
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
-  const [review, setReview] = useState(true);
+  const [review, setReview] = useState(false);
 
   function submit() {
     if (!name.trim() || !accountId) {

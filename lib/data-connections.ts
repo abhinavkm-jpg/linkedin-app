@@ -1,7 +1,19 @@
 import "server-only";
-import { and, or, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  or,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  notExists,
+  arrayOverlaps,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { db } from "@/db";
-import { connections, type Connection } from "@/db/schema";
+import { connections, enrollments, type Connection, type CampaignTargeting } from "@/db/schema";
 
 export interface ConnectionFilters {
   accountId?: string;
@@ -57,6 +69,72 @@ export async function getConnections(f: ConnectionFilters): Promise<ConnectionsR
   ]);
 
   return { rows, total: Number(total), page, pageSize };
+}
+
+export interface IcpMatchResult {
+  count: number;
+  ids: string[];
+}
+
+/**
+ * Find connections matching a campaign's ICP (targeting), excluding those
+ * already enrolled in the campaign. Title keywords match the LinkedIn headline
+ * OR (when enriched) the position; countries match only enriched rows.
+ */
+export async function getIcpMatches(
+  accountId: string,
+  targeting: CampaignTargeting,
+  opts: { excludeCampaignId?: string; idLimit?: number } = {},
+): Promise<IcpMatchResult> {
+  const clauses: SQL[] = [
+    eq(connections.accountId, accountId),
+    eq(connections.relationshipStatus, "connection"),
+  ];
+
+  const keywords = (targeting.titleKeywords ?? []).map((k) => k.trim()).filter(Boolean);
+  if (keywords.length > 0) {
+    const kwClause = or(
+      ...keywords.flatMap((kw) => [
+        ilike(connections.headline, `%${kw}%`),
+        ilike(connections.position, `%${kw}%`),
+      ]),
+    );
+    if (kwClause) clauses.push(kwClause);
+  }
+
+  const countries = (targeting.countries ?? []).filter(Boolean);
+  if (countries.length > 0) clauses.push(inArray(connections.locationCountry, countries));
+
+  const tags = (targeting.tags ?? []).filter(Boolean);
+  if (tags.length > 0) clauses.push(arrayOverlaps(connections.tags, tags));
+
+  if (opts.excludeCampaignId) {
+    clauses.push(
+      notExists(
+        db
+          .select({ x: sql`1` })
+          .from(enrollments)
+          .where(
+            and(
+              eq(enrollments.campaignId, opts.excludeCampaignId),
+              eq(enrollments.connectionId, connections.id),
+            ),
+          ),
+      ),
+    );
+  }
+
+  const where = and(...clauses);
+  const [[{ total }], rows] = await Promise.all([
+    db.select({ total: count() }).from(connections).where(where),
+    db
+      .select({ id: connections.id })
+      .from(connections)
+      .where(where)
+      .limit(opts.idLimit ?? 1000),
+  ]);
+
+  return { count: Number(total), ids: rows.map((r) => r.id) };
 }
 
 /** Distinct country codes present, for the filter dropdown. */
