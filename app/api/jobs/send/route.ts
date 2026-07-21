@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { and, asc, eq, inArray, lt, lte, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import { enrollments } from "@/db/schema";
+import { enrollments, campaigns } from "@/db/schema";
 import { readJob } from "@/lib/jobs";
 import { enqueueJob } from "@/lib/qstash";
 import { processEnrollment } from "@/lib/outreach/send";
@@ -37,11 +37,14 @@ export async function POST(req: Request) {
     ? eq(enrollments.campaignId, job.body.campaignId)
     : undefined;
 
+  // Only process enrollments whose campaign is ACTIVE — never draft/paused.
   const candidates = await db
     .select({ id: enrollments.id })
     .from(enrollments)
+    .innerJoin(campaigns, eq(campaigns.id, enrollments.campaignId))
     .where(
       and(
+        eq(campaigns.status, "active"),
         inArray(enrollments.state, [...DUE_STATES]),
         or(isNull(enrollments.nextRunAt), lte(enrollments.nextRunAt, now)),
         campaignFilter,

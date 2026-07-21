@@ -32,8 +32,17 @@ export type Enrollment = typeof enrollments.$inferSelect;
  */
 export async function processEnrollment(enr: Enrollment): Promise<void> {
   const [camp] = await db.select().from(campaigns).where(eq(campaigns.id, enr.campaignId)).limit(1);
-  if (!camp || camp.status === "paused" || camp.status === "archived") {
-    await db.update(enrollments).set({ state: "paused" }).where(eq(enrollments.id, enr.id));
+  if (!camp) {
+    await db
+      .update(enrollments)
+      .set({ state: "failed", lastError: "Campaign missing", updatedAt: new Date() })
+      .where(eq(enrollments.id, enr.id));
+    return;
+  }
+  // Only active campaigns send. For anything else (draft/paused/archived), release
+  // the claim back to queued and hold — never complete.
+  if (camp.status !== "active") {
+    await db.update(enrollments).set({ state: "queued", nextRunAt: hold() }).where(eq(enrollments.id, enr.id));
     return;
   }
 
@@ -43,6 +52,14 @@ export async function processEnrollment(enr: Enrollment): Promise<void> {
     .where(eq(sequenceSteps.campaignId, camp.id))
     .orderBy(asc(sequenceSteps.stepOrder));
 
+  // No steps yet → hold (do NOT complete — this was the "activated but nothing
+  // sent" bug: 0 steps made `currentStep >= steps.length` true immediately).
+  if (steps.length === 0) {
+    await db.update(enrollments).set({ state: "queued", nextRunAt: hold() }).where(eq(enrollments.id, enr.id));
+    return;
+  }
+
+  // Genuinely finished the whole sequence.
   if (enr.currentStep >= steps.length) {
     await db.update(enrollments).set({ state: "completed" }).where(eq(enrollments.id, enr.id));
     return;
@@ -392,4 +409,9 @@ export function tomorrow(): Date {
   const d = new Date();
   d.setUTCHours(24, 5, 0, 0);
   return d;
+}
+
+/** Short hold before re-checking (used when a campaign isn't ready to send yet). */
+function hold(): Date {
+  return new Date(Date.now() + 5 * 60 * 1000);
 }
