@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq, inArray, lte, isNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, lte, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import { enrollments } from "@/db/schema";
 import { readJob } from "@/lib/jobs";
@@ -11,28 +11,63 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const BATCH = 8;
-const DUE_STATES = ["queued", "accepted", "in_followup", "messaging"] as const;
+// Resting states eligible for sending. `messaging` is the transient "claimed /
+// in-flight" state used to prevent concurrent workers double-sending.
+const DUE_STATES = ["queued", "accepted", "in_followup"] as const;
+const CLAIM_STALE_MS = 10 * 60 * 1000;
 
 export async function POST(req: Request) {
   const job = await readJob<{ campaignId?: string }>(req);
   if (!job.ok) return NextResponse.json({ error: "unauthorized" }, { status: job.status });
 
   const now = new Date();
-  const due = await db
-    .select()
+
+  // Recover claims left in-flight by a crashed/timed-out worker.
+  await db
+    .update(enrollments)
+    .set({ state: "queued", updatedAt: now })
+    .where(
+      and(
+        eq(enrollments.state, "messaging"),
+        lt(enrollments.updatedAt, new Date(now.getTime() - CLAIM_STALE_MS)),
+      ),
+    );
+
+  const campaignFilter = job.body.campaignId
+    ? eq(enrollments.campaignId, job.body.campaignId)
+    : undefined;
+
+  const candidates = await db
+    .select({ id: enrollments.id })
     .from(enrollments)
     .where(
       and(
         inArray(enrollments.state, [...DUE_STATES]),
         or(isNull(enrollments.nextRunAt), lte(enrollments.nextRunAt, now)),
-        job.body.campaignId ? eq(enrollments.campaignId, job.body.campaignId) : undefined,
+        campaignFilter,
       ),
     )
     .orderBy(asc(enrollments.nextRunAt))
     .limit(BATCH);
 
   let processed = 0;
-  for (const enr of due) {
+  for (const cand of candidates) {
+    // Atomic claim: flip to `messaging` only if still due. A single UPDATE is
+    // atomic per row, so only one concurrent worker wins each enrollment.
+    const claimed = await db
+      .update(enrollments)
+      .set({ state: "messaging", updatedAt: new Date() })
+      .where(
+        and(
+          eq(enrollments.id, cand.id),
+          inArray(enrollments.state, [...DUE_STATES]),
+          or(isNull(enrollments.nextRunAt), lte(enrollments.nextRunAt, new Date())),
+        ),
+      )
+      .returning();
+    const enr = claimed[0];
+    if (!enr) continue; // lost the race to another worker
+
     try {
       await processEnrollment(enr);
       processed++;
@@ -46,8 +81,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // If we filled the batch, there may be more due — continue after a short gap.
-  if (due.length === BATCH) {
+  if (candidates.length === BATCH) {
     await enqueueJob("send", job.body.campaignId ? { campaignId: job.body.campaignId } : {}, {
       delaySeconds: 30,
     });

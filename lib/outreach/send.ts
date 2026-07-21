@@ -66,7 +66,7 @@ export async function processEnrollment(enr: Enrollment): Promise<void> {
         // Daily enrichment budget exhausted — try again tomorrow.
         await db
           .update(enrollments)
-          .set({ nextRunAt: tomorrow(), updatedAt: new Date() })
+          .set({ state: "queued", nextRunAt: tomorrow(), updatedAt: new Date() })
           .where(eq(enrollments.id, enr.id));
         return;
       }
@@ -76,7 +76,7 @@ export async function processEnrollment(enr: Enrollment): Promise<void> {
         if (e instanceof UnipileError && e.isRateLimited) {
           await db
             .update(enrollments)
-            .set({ nextRunAt: tomorrow(), updatedAt: new Date() })
+            .set({ state: "queued", nextRunAt: tomorrow(), updatedAt: new Date() })
             .where(eq(enrollments.id, enr.id));
           return;
         }
@@ -102,7 +102,7 @@ export async function processEnrollment(enr: Enrollment): Promise<void> {
   if (!(await canSend(account.id, kind))) {
     await db
       .update(enrollments)
-      .set({ nextRunAt: tomorrow(), updatedAt: new Date() })
+      .set({ state: "queued", nextRunAt: tomorrow(), updatedAt: new Date() })
       .where(eq(enrollments.id, enr.id));
     return;
   }
@@ -189,7 +189,10 @@ async function doInvite(
       return;
     }
     if (e instanceof UnipileError && e.isRateLimited) {
-      await db.update(enrollments).set({ nextRunAt: tomorrow() }).where(eq(enrollments.id, enr.id));
+      await db
+        .update(enrollments)
+        .set({ state: "queued", nextRunAt: tomorrow() })
+        .where(eq(enrollments.id, enr.id));
       return;
     }
     throw e;
@@ -253,7 +256,10 @@ async function doMessage(
     await advanceAfterMessage(enr, steps);
   } catch (e) {
     if (e instanceof UnipileError && e.isRateLimited) {
-      await db.update(enrollments).set({ nextRunAt: tomorrow() }).where(eq(enrollments.id, enr.id));
+      await db
+        .update(enrollments)
+        .set({ state: "queued", nextRunAt: tomorrow() })
+        .where(eq(enrollments.id, enr.id));
       return;
     }
     throw e;
