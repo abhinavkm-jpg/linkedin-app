@@ -40,10 +40,15 @@ export default async function DashboardPage() {
 
         {stats && (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard icon={Contact} label="Connections" value={stats.totalConnections} />
-            <StatCard icon={Megaphone} label="Active campaigns" value={stats.activeCampaigns} />
-            <StatCard icon={Send} label="Sent today" value={stats.invitesToday + stats.messagesToday} />
-            <StatCard icon={MessageSquare} label="Unread replies" value={stats.unreadChats} />
+            <StatCard icon={Contact} label="Connections" value={stats.totalConnections} tone="blue" />
+            <StatCard icon={Megaphone} label="Active campaigns" value={stats.activeCampaigns} tone="violet" />
+            <StatCard
+              icon={Send}
+              label="Sent today"
+              value={stats.invitesToday + stats.messagesToday}
+              tone="emerald"
+            />
+            <StatCard icon={MessageSquare} label="Unread replies" value={stats.unreadChats} tone="amber" />
           </div>
         )}
 
@@ -96,24 +101,37 @@ export default async function DashboardPage() {
   );
 }
 
+const TONES: Record<string, string> = {
+  blue: "bg-blue-50 text-blue-600 ring-blue-100",
+  violet: "bg-violet-50 text-violet-600 ring-violet-100",
+  emerald: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+  amber: "bg-amber-50 text-amber-600 ring-amber-100",
+};
+
 function StatCard({
   icon: Icon,
   label,
   value,
+  tone = "blue",
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
+  tone?: keyof typeof TONES;
 }) {
   return (
-    <Card>
+    <Card className="transition-shadow hover:shadow-md">
       <CardContent className="flex items-center gap-4 py-5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-          <Icon className="h-5 w-5 text-muted-foreground" />
+        <div
+          className={`flex h-11 w-11 items-center justify-center rounded-xl ring-4 ${TONES[tone] ?? TONES.blue}`}
+        >
+          <Icon className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-2xl font-semibold tabular-nums">{value.toLocaleString()}</p>
-          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className="text-2xl font-semibold tabular-nums tracking-tight">
+            {value.toLocaleString()}
+          </p>
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
         </div>
       </CardContent>
     </Card>

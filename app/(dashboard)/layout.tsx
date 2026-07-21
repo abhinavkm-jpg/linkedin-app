@@ -14,11 +14,14 @@ export default async function DashboardLayout({
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-64 shrink-0 flex-col border-r bg-sidebar md:flex">
-        <div className="flex h-14 items-center gap-2 border-b px-5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-sm font-semibold">
+        <div className="flex h-14 items-center gap-2.5 border-b px-5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-blue-400 text-sm font-bold text-primary-foreground shadow-sm">
             in
           </div>
-          <span className="font-semibold">Outreach</span>
+          <div className="flex flex-col leading-none">
+            <span className="font-semibold tracking-tight">Outreach</span>
+            <span className="text-[10px] text-muted-foreground">LinkedIn engine</span>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto">
           <Nav />
