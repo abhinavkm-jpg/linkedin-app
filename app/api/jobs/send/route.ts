@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, asc, count, eq, inArray, lt, lte, isNull, or } from "drizzle-orm";
+import { and, asc, count, eq, exists, notExists, inArray, lt, lte, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { enrollments, campaigns, linkedinAccounts } from "@/db/schema";
 import { readJob } from "@/lib/jobs";
@@ -118,6 +118,38 @@ export async function POST(req: Request) {
       delaySeconds: randomSendGapSeconds(),
     });
   }
+
+  // Auto-complete active campaigns that have enrollments but nothing left to do.
+  // `awaiting_accept` (pending invite) and `paused` (awaiting review) still count
+  // as pending, so those campaigns stay active.
+  const PENDING = [
+    "queued",
+    "accepted",
+    "in_followup",
+    "messaging",
+    "awaiting_accept",
+    "paused",
+  ] as const;
+  await db
+    .update(campaigns)
+    .set({ status: "completed" })
+    .where(
+      and(
+        eq(campaigns.status, "active"),
+        exists(
+          db
+            .select({ x: sql`1` })
+            .from(enrollments)
+            .where(eq(enrollments.campaignId, campaigns.id)),
+        ),
+        notExists(
+          db
+            .select({ x: sql`1` })
+            .from(enrollments)
+            .where(and(eq(enrollments.campaignId, campaigns.id), inArray(enrollments.state, [...PENDING]))),
+        ),
+      ),
+    );
 
   return NextResponse.json({ ok: true, sent, remaining: Number(remaining) });
 }

@@ -58,6 +58,10 @@ export async function enrollConnections(
         nextRunAt: new Date(),
       })),
     );
+    // Adding people to a finished campaign brings it back to life.
+    if (camp.status === "completed") {
+      await db.update(campaigns).set({ status: "active" }).where(eq(campaigns.id, campaignId));
+    }
     await enqueueJob("send", { campaignId });
   }
 
