@@ -7,7 +7,8 @@ import { Search, Sparkles, UserPlus, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { StatusPill } from "@/components/status-pill";
 import {
   Table,
   TableBody,
@@ -237,8 +238,18 @@ export function ConnectionsBrowser({
                       aria-label="Select row"
                     />
                   </TableCell>
-                  <TableCell className="font-medium">
-                    {[c.firstName, c.lastName].filter(Boolean).join(" ") || c.publicIdentifier}
+                  <TableCell>
+                    <div className="flex items-center gap-2.5">
+                      <Avatar className="h-7 w-7 shrink-0">
+                        {c.profilePictureUrl ? <AvatarImage src={c.profilePictureUrl} alt="" /> : null}
+                        <AvatarFallback className="bg-primary/10 text-[10px] font-medium text-primary">
+                          {((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")).toUpperCase() || "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="font-medium">
+                        {[c.firstName, c.lastName].filter(Boolean).join(" ") || c.publicIdentifier}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell className="hidden max-w-xs truncate md:table-cell text-muted-foreground">
                     {c.headline}
@@ -246,7 +257,7 @@ export function ConnectionsBrowser({
                   <TableCell className="hidden lg:table-cell">{c.company ?? "—"}</TableCell>
                   <TableCell className="hidden lg:table-cell">{c.locationCountry ?? "—"}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{relationshipStatusLabel(c.relationshipStatus)}</Badge>
+                    <StatusPill status={c.relationshipStatus} />
                   </TableCell>
                 </TableRow>
               ))

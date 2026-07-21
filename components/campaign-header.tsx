@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { StatusPill } from "@/components/status-pill";
 import {
   updateCampaign,
   updateCampaignStatus,
@@ -158,9 +159,12 @@ export function CampaignHeader({
         {stateCounts.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {stateCounts.map((s) => (
-              <div key={s.state} className="rounded-md border px-3 py-1.5 text-sm">
-                <span className="font-medium tabular-nums">{s.n}</span>{" "}
-                <span className="text-muted-foreground">{s.state.replace(/_/g, " ")}</span>
+              <div
+                key={s.state}
+                className="flex items-center gap-1.5 rounded-md border bg-card px-2.5 py-1 text-sm"
+              >
+                <span className="font-semibold tabular-nums">{s.n}</span>
+                <StatusPill status={s.state} />
               </div>
             ))}
           </div>

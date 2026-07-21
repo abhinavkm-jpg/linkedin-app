@@ -7,8 +7,7 @@ import { toast } from "sonner";
 import { UserPlus, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { relationshipStatusLabel } from "@/lib/status";
+import { StatusPill } from "@/components/status-pill";
 import { enrollMatchingIcp } from "@/app/(dashboard)/campaigns/actions";
 
 export function EnrollmentPanel({
@@ -83,7 +82,7 @@ export function EnrollmentPanel({
                       <span className="ml-2 truncate text-muted-foreground">{e.headline}</span>
                     )}
                   </div>
-                  <Badge variant="outline">{relationshipStatusLabel(e.state)}</Badge>
+                  <StatusPill status={e.state} />
                 </li>
               ))}
             </ul>
