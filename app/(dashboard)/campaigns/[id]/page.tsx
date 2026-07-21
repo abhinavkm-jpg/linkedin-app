@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, asc, desc, eq, count } from "drizzle-orm";
+import { and, asc, desc, eq, count, countDistinct, inArray } from "drizzle-orm";
 import { ChevronLeft } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { CampaignHeader } from "@/components/campaign-header";
+import { CampaignFunnel } from "@/components/campaign-funnel";
 import { IcpEditor } from "@/components/icp-editor";
 import { EnrollmentPanel } from "@/components/enrollment-panel";
 import { StepsEditor } from "@/components/steps-editor";
@@ -88,6 +89,22 @@ export default async function CampaignDetailPage({
 
   const editable = campaign.status === "draft" || campaign.status === "paused";
 
+  // Funnel metrics.
+  const stateCountsNum = stateCounts.map((s) => ({ state: s.state, n: Number(s.n) }));
+  const enrolledTotal = stateCountsNum.reduce((sum, s) => sum + s.n, 0);
+  const repliedCount = stateCountsNum.find((s) => s.state === "replied")?.n ?? 0;
+  const completedCount = stateCountsNum.find((s) => s.state === "completed")?.n ?? 0;
+  const [{ contacted }] = await db
+    .select({ contacted: countDistinct(activities.connectionId) })
+    .from(activities)
+    .where(
+      and(
+        eq(activities.campaignId, id),
+        eq(activities.status, "success"),
+        inArray(activities.type, ["message", "invite"]),
+      ),
+    );
+
   return (
     <>
       <PageHeader title={campaign.name} description="Configure targeting, sequence, and enrollment.">
@@ -103,7 +120,15 @@ export default async function CampaignDetailPage({
           reviewBeforeSend={campaign.reviewBeforeSend}
           dedupeContacts={campaign.dedupeContacts}
           hasSteps={steps.length > 0}
-          stateCounts={stateCounts.map((s) => ({ state: s.state, n: Number(s.n) }))}
+          stateCounts={stateCountsNum}
+        />
+
+        <CampaignFunnel
+          stateCounts={stateCountsNum}
+          enrolled={enrolledTotal}
+          contacted={Number(contacted)}
+          replied={repliedCount}
+          completed={completedCount}
         />
 
         {drafts.length > 0 && (
