@@ -27,6 +27,7 @@ export function CampaignHeader({
   name,
   status,
   reviewBeforeSend,
+  dedupeContacts,
   hasSteps,
   stateCounts,
 }: {
@@ -34,6 +35,7 @@ export function CampaignHeader({
   name: string;
   status: string;
   reviewBeforeSend: boolean;
+  dedupeContacts: boolean;
   hasSteps: boolean;
   stateCounts: { state: string; n: number }[];
 }) {
@@ -56,6 +58,16 @@ export function CampaignHeader({
     start(async () => {
       await updateCampaign(id, { reviewBeforeSend: next });
       toast.success(next ? "AI review on" : "AI review off — messages will auto-send");
+      router.refresh();
+    });
+  }
+
+  function toggleDedupe(next: boolean) {
+    start(async () => {
+      await updateCampaign(id, { dedupeContacts: next });
+      toast.success(
+        next ? "Each person will be messaged once" : "Multi DMs on — people can be messaged repeatedly",
+      );
       router.refresh();
     });
   }
@@ -109,7 +121,16 @@ export function CampaignHeader({
           )}
           <Badge variant={statusTone[status] ?? "outline"}>{status}</Badge>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={dedupeContacts}
+                onChange={(e) => toggleDedupe(e.target.checked)}
+                disabled={pending}
+              />
+              Message each person only once
+            </label>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

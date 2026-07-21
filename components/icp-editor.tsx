@@ -6,21 +6,37 @@ import { toast } from "sonner";
 import { Loader2, Target } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { ChipMultiSelect } from "@/components/chip-multiselect";
 import { updateCampaign } from "@/app/(dashboard)/campaigns/actions";
 import type { CampaignTargeting } from "@/db/schema";
 
-const COUNTRY_PRESETS = ["US", "GB", "UK", "SG", "IL", "CA", "AU"];
+const TITLE_PRESETS = [
+  "Manager",
+  "Director",
+  "VP",
+  "Head of",
+  "CMO",
+  "CRO",
+  "CEO",
+  "COO",
+  "Founder",
+  "Co-Founder",
+  "Owner",
+  "President",
+  "Demand Generation",
+  "Demand Gen",
+  "Marketing",
+  "Growth",
+  "Revenue",
+  "Lead Generation",
+  "ABM",
+  "Sales",
+  "GTM",
+];
 
-function toList(s: string): string[] {
-  return s
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean);
-}
+const COUNTRY_PRESETS = ["US", "GB", "UK", "SG", "IL", "CA", "AU"];
 
 export function IcpEditor({
   campaignId,
@@ -34,27 +50,19 @@ export function IcpEditor({
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [titles, setTitles] = useState((targeting.titleKeywords ?? []).join(", "));
-  const [tags, setTags] = useState((targeting.tags ?? []).join(", "));
+  const [titleKeywords, setTitleKeywords] = useState<string[]>(targeting.titleKeywords ?? []);
   const [countries, setCountries] = useState<string[]>(targeting.countries ?? []);
-
-  function toggleCountry(c: string) {
-    setCountries((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
-  }
+  const [tags, setTags] = useState<string[]>(targeting.tags ?? []);
 
   function save() {
     start(async () => {
-      await updateCampaign(campaignId, {
-        targeting: {
-          titleKeywords: toList(titles),
-          countries,
-          tags: toList(tags),
-        },
-      });
+      await updateCampaign(campaignId, { targeting: { titleKeywords, countries, tags } });
       toast.success("ICP saved");
       router.refresh();
     });
   }
+
+  const empty = titleKeywords.length + countries.length + tags.length === 0;
 
   return (
     <Card>
@@ -63,47 +71,38 @@ export function IcpEditor({
           <Target className="h-4 w-4" /> Ideal Customer Profile (ICP)
         </CardTitle>
         <CardDescription>
-          Who this campaign targets. Title keywords match a connection&apos;s LinkedIn headline (and
-          role once enriched). Used to find and enroll matching connections.
+          Who this campaign targets. Leave everything empty to target your whole network on this
+          account. Title keywords match a connection&apos;s LinkedIn headline (and role once
+          enriched).
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
         <div className="space-y-1.5">
-          <Label>Title keywords (comma separated)</Label>
-          <Input
-            value={titles}
-            onChange={(e) => setTitles(e.target.value)}
-            placeholder="VP, Director, Head of, Demand Gen, Marketing, CMO, Founder"
+          <Label>Title keywords</Label>
+          <ChipMultiSelect
+            value={titleKeywords}
+            onChange={setTitleKeywords}
+            presets={TITLE_PRESETS}
+            placeholder="Add a title/keyword and press Enter…"
           />
         </div>
 
         <div className="space-y-1.5">
           <Label>Countries</Label>
-          <div className="flex flex-wrap gap-1.5">
-            {[...new Set([...COUNTRY_PRESETS, ...countries])].map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => toggleCountry(c)}
-                className={cn(
-                  "rounded-md border px-2.5 py-1 text-xs",
-                  countries.includes(c)
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-input text-muted-foreground hover:bg-muted",
-                )}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
+          <ChipMultiSelect
+            value={countries}
+            onChange={setCountries}
+            presets={COUNTRY_PRESETS}
+            placeholder="Add a country code (e.g. US)…"
+          />
           <p className="text-xs text-muted-foreground">
             Country filtering only applies to enriched connections (LinkedIn caps profile lookups).
           </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label>Tags (optional, comma separated)</Label>
-          <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="warm, event-lead" />
+          <Label>Tags (optional)</Label>
+          <ChipMultiSelect value={tags} onChange={setTags} placeholder="Add a tag…" />
         </div>
 
         <div className="flex items-center gap-3">
@@ -112,7 +111,9 @@ export function IcpEditor({
             Save ICP
           </Button>
           {matchCount !== null && (
-            <Badge variant="secondary">{matchCount.toLocaleString()} connections match</Badge>
+            <Badge variant="secondary">
+              {matchCount.toLocaleString()} {empty ? "connections (whole network)" : "match"}
+            </Badge>
           )}
         </div>
       </CardContent>

@@ -258,6 +258,9 @@ export const campaigns = pgTable("campaigns", {
   status: campaignStatusEnum("status").notNull().default("draft"),
   targeting: jsonb("targeting").$type<CampaignTargeting>().notNull().default({}),
   reviewBeforeSend: boolean("review_before_send").notNull().default(true),
+  // When true, each connection can be enrolled/messaged only once in this
+  // campaign ("unique DMs"). When false, repeats are allowed ("multi DMs").
+  dedupeContacts: boolean("dedupe_contacts").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -310,7 +313,9 @@ export const enrollments = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("enrollments_campaign_connection_idx").on(t.campaignId, t.connectionId),
+    // Non-unique: "multi DMs" campaigns may enroll a person more than once.
+    // Uniqueness (when dedupeContacts is on) is enforced in application logic.
+    index("enrollments_campaign_connection_idx").on(t.campaignId, t.connectionId),
     // The send worker scans by (state, nextRunAt).
     index("enrollments_due_idx").on(t.state, t.nextRunAt),
     index("enrollments_account_idx").on(t.accountId),

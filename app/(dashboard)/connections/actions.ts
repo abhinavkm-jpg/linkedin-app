@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { inArray, eq } from "drizzle-orm";
+import { and, inArray, eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { connections, enrollments, campaigns } from "@/db/schema";
@@ -17,9 +17,9 @@ async function requireUser() {
 export async function enrollConnections(
   connectionIds: string[],
   campaignId: string,
-): Promise<{ enrolled: number }> {
+): Promise<{ enrolled: number; skipped: number }> {
   await requireUser();
-  if (connectionIds.length === 0) return { enrolled: 0 };
+  if (connectionIds.length === 0) return { enrolled: 0, skipped: 0 };
 
   const camp = (
     await db.select().from(campaigns).where(eq(campaigns.id, campaignId)).limit(1)
@@ -32,28 +32,38 @@ export async function enrollConnections(
     .where(inArray(connections.id, connectionIds));
 
   // Only enroll connections belonging to the campaign's account.
-  const eligible = conns.filter((c) => c.accountId === camp.accountId);
-  if (eligible.length === 0) return { enrolled: 0 };
+  let ids = conns.filter((c) => c.accountId === camp.accountId).map((c) => c.id);
+  let skipped = 0;
 
-  await db
-    .insert(enrollments)
-    .values(
-      eligible.map((c) => ({
+  // Unique-DMs campaigns skip anyone already enrolled here (the DB index is no
+  // longer unique, so dedup is enforced in app logic).
+  if (camp.dedupeContacts && ids.length > 0) {
+    const existing = await db
+      .select({ connectionId: enrollments.connectionId })
+      .from(enrollments)
+      .where(and(eq(enrollments.campaignId, campaignId), inArray(enrollments.connectionId, ids)));
+    const seen = new Set(existing.map((e) => e.connectionId));
+    const before = ids.length;
+    ids = ids.filter((id) => !seen.has(id));
+    skipped = before - ids.length;
+  }
+
+  if (ids.length > 0) {
+    await db.insert(enrollments).values(
+      ids.map((id) => ({
         campaignId,
-        connectionId: c.id,
+        connectionId: id,
         accountId: camp.accountId,
         state: "queued" as const,
         nextRunAt: new Date(),
       })),
-    )
-    .onConflictDoNothing({
-      target: [enrollments.campaignId, enrollments.connectionId],
-    });
+    );
+    await enqueueJob("send", { campaignId });
+  }
 
-  await enqueueJob("send", { campaignId });
   revalidatePath("/connections");
   revalidatePath("/campaigns");
-  return { enrolled: eligible.length };
+  return { enrolled: ids.length, skipped };
 }
 
 /** Queue enrichment for selected connections (respects the daily cap in the worker). */

@@ -96,7 +96,10 @@ export function ConnectionsBrowser({
     start(async () => {
       try {
         const res = await enrollConnections(ids, campaignId);
-        toast.success(`Enrolled ${res.enrolled} connection(s)`);
+        toast.success(
+          `Enrolled ${res.enrolled}` +
+            (res.skipped > 0 ? ` · ${res.skipped} already in this campaign` : ""),
+        );
         setSelected(new Set());
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Enroll failed");

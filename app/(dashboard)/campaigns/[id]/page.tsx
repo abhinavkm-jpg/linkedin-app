@@ -72,15 +72,18 @@ export default async function CampaignDetailPage({
   const t = campaign.targeting ?? {};
   const hasIcp =
     (t.titleKeywords?.length ?? 0) + (t.countries?.length ?? 0) + (t.tags?.length ?? 0) > 0;
+  // Always compute the pool size — with no ICP this is the whole account.
   let icpMatchCount: number | null = null;
-  if (hasIcp) {
-    try {
-      icpMatchCount = (
-        await getIcpMatches(campaign.accountId, t, { excludeCampaignId: id, idLimit: 1 })
-      ).count;
-    } catch {
-      icpMatchCount = null;
-    }
+  try {
+    icpMatchCount = (
+      await getIcpMatches(campaign.accountId, t, {
+        excludeCampaignId: id,
+        idLimit: 1,
+        dedupe: campaign.dedupeContacts,
+      })
+    ).count;
+  } catch {
+    icpMatchCount = null;
   }
 
   const editable = campaign.status === "draft" || campaign.status === "paused";
@@ -98,6 +101,7 @@ export default async function CampaignDetailPage({
           name={campaign.name}
           status={campaign.status}
           reviewBeforeSend={campaign.reviewBeforeSend}
+          dedupeContacts={campaign.dedupeContacts}
           hasSteps={steps.length > 0}
           stateCounts={stateCounts.map((s) => ({ state: s.state, n: Number(s.n) }))}
         />

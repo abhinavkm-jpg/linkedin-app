@@ -109,13 +109,19 @@ export async function deleteCampaign(id: string): Promise<void> {
 
 export async function updateCampaign(
   id: string,
-  input: { name?: string; reviewBeforeSend?: boolean; targeting?: CampaignTargeting },
+  input: {
+    name?: string;
+    reviewBeforeSend?: boolean;
+    targeting?: CampaignTargeting;
+    dedupeContacts?: boolean;
+  },
 ): Promise<void> {
   await requireUser();
   const set: Record<string, unknown> = {};
   if (input.name !== undefined) set.name = input.name;
   if (input.reviewBeforeSend !== undefined) set.reviewBeforeSend = input.reviewBeforeSend;
   if (input.targeting !== undefined) set.targeting = input.targeting;
+  if (input.dedupeContacts !== undefined) set.dedupeContacts = input.dedupeContacts;
   if (Object.keys(set).length === 0) return;
   await db.update(campaigns).set(set).where(eq(campaigns.id, id));
 
@@ -185,7 +191,7 @@ export async function moveStep(
 
 export async function enrollMatchingIcp(
   campaignId: string,
-): Promise<{ enrolled: number; matched: number }> {
+): Promise<{ enrolled: number; skipped: number; matched: number }> {
   await requireUser();
   const [camp] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId)).limit(1);
   if (!camp) throw new Error("Campaign not found");
@@ -193,11 +199,12 @@ export async function enrollMatchingIcp(
   const { ids, count } = await getIcpMatches(camp.accountId, camp.targeting, {
     excludeCampaignId: campaignId,
     idLimit: 1000,
+    dedupe: camp.dedupeContacts,
   });
-  if (ids.length === 0) return { enrolled: 0, matched: count };
+  if (ids.length === 0) return { enrolled: 0, skipped: 0, matched: count };
 
   const res = await enrollConnections(ids, campaignId);
-  return { enrolled: res.enrolled, matched: count };
+  return { enrolled: res.enrolled, skipped: res.skipped, matched: count };
 }
 
 /* -------------------------------------------------------------------------- */

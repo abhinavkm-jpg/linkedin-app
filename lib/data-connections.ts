@@ -5,6 +5,7 @@ import {
   count,
   desc,
   eq,
+  ne,
   ilike,
   inArray,
   notExists,
@@ -91,11 +92,13 @@ export interface IcpMatchResult {
 export async function getIcpMatches(
   accountId: string,
   targeting: CampaignTargeting,
-  opts: { excludeCampaignId?: string; idLimit?: number } = {},
+  opts: { excludeCampaignId?: string; idLimit?: number; dedupe?: boolean } = {},
 ): Promise<IcpMatchResult> {
+  // Pool = all of the account's connections (they are all 1st-degree), minus
+  // anyone flagged do-not-contact. Empty targeting matches the whole pool.
   const clauses: SQL[] = [
     eq(connections.accountId, accountId),
-    eq(connections.relationshipStatus, "connection"),
+    ne(connections.relationshipStatus, "do_not_contact"),
   ];
 
   const keywords = (targeting.titleKeywords ?? []).map((k) => k.trim()).filter(Boolean);
@@ -115,7 +118,8 @@ export async function getIcpMatches(
   const tags = (targeting.tags ?? []).filter(Boolean);
   if (tags.length > 0) clauses.push(arrayOverlaps(connections.tags, tags));
 
-  if (opts.excludeCampaignId) {
+  // Per-campaign dedup: only when the campaign wants unique contacts.
+  if (opts.excludeCampaignId && opts.dedupe !== false) {
     clauses.push(
       notExists(
         db

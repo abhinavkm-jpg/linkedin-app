@@ -29,10 +29,10 @@ export function EnrollmentPanel({
     start(async () => {
       try {
         const res = await enrollMatchingIcp(campaignId);
-        toast.success(
-          `Enrolled ${res.enrolled} of ${res.matched} matching connection(s)` +
-            (res.matched > res.enrolled ? " (first 1000 per run)" : ""),
-        );
+        const parts = [`Enrolled ${res.enrolled}`];
+        if (res.skipped > 0) parts.push(`${res.skipped} already in this campaign`);
+        if (res.matched > res.enrolled + res.skipped) parts.push("first 1000 per run");
+        toast.success(parts.join(" · "));
         router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Enroll failed");
@@ -51,17 +51,21 @@ export function EnrollmentPanel({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={enroll} disabled={pending || !hasIcp || (matchCount ?? 0) === 0}>
+          <Button onClick={enroll} disabled={pending || (matchCount ?? 0) === 0}>
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-            Enroll matching ICP{matchCount !== null ? ` (${matchCount.toLocaleString()})` : ""}
+            {hasIcp ? "Enroll matching" : "Enroll all"}
+            {matchCount !== null ? ` (${matchCount.toLocaleString()})` : ""}
           </Button>
           <Button variant="outline" render={<Link href="/connections" />}>
             Enroll manually
           </Button>
-          {!hasIcp && (
-            <span className="text-sm text-muted-foreground">Define an ICP above to enable one-click enrollment.</span>
-          )}
         </div>
+        <p className="text-xs text-muted-foreground">
+          {hasIcp
+            ? "Targets connections matching your ICP."
+            : "No ICP set — this targets your whole network on this account."}{" "}
+          People already in this campaign are skipped unless &ldquo;multi DMs&rdquo; is on.
+        </p>
 
         <div>
           <h4 className="mb-2 text-sm font-medium">
