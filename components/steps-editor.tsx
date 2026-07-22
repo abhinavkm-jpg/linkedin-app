@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Loader2, Mail, UserPlus, ChevronUp, ChevronDown } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,11 +36,7 @@ export function StepsEditor({
   const [adding, setAdding] = useState(false);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Sequence steps</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <div className="space-y-3">
         {steps.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No steps yet. Add an invite (for non-connections) or a message (for existing connections).
@@ -146,8 +141,7 @@ export function StepsEditor({
               <Plus className="h-4 w-4" /> Add step
             </Button>
           ))}
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 

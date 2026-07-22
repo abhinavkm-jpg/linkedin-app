@@ -3,8 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Target } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -65,18 +64,13 @@ export function IcpEditor({
   const empty = titleKeywords.length + countries.length + tags.length === 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Target className="h-4 w-4" /> Ideal Customer Profile (ICP)
-        </CardTitle>
-        <CardDescription>
-          Who this campaign targets. Leave everything empty to target your whole network on this
-          account. Title keywords match a connection&apos;s LinkedIn headline (and role once
-          enriched).
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-5">
+    <div className="space-y-5">
+      <p className="text-sm text-muted-foreground">
+        Who this campaign targets. Leave everything empty to target your whole network on this
+        account. Title keywords match a connection&apos;s LinkedIn headline (and role once
+        enriched).
+      </p>
+      <div className="space-y-5">
         <div className="space-y-1.5">
           <Label>Title keywords</Label>
           <ChipMultiSelect
@@ -116,7 +110,7 @@ export function IcpEditor({
             </Badge>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

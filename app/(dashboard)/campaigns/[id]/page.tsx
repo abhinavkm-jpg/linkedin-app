@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, desc, eq, count, countDistinct, inArray } from "drizzle-orm";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Target, UserPlus, ListOrdered } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
 import { CampaignHeader } from "@/components/campaign-header";
 import { CampaignFunnel } from "@/components/campaign-funnel";
 import { IcpEditor } from "@/components/icp-editor";
@@ -142,32 +149,69 @@ export default async function CampaignDetailPage({
           />
         )}
 
-        <IcpEditor
-          campaignId={campaign.id}
-          targeting={t}
-          matchCount={icpMatchCount}
-          accountId={campaign.accountId}
-        />
+        <Accordion defaultValue={["icp"]}>
+          <AccordionItem value="icp">
+            <AccordionTrigger>
+              <Target className="h-4 w-4 text-muted-foreground" />
+              <span>Ideal Customer Profile</span>
+              {icpMatchCount !== null && (
+                <Badge variant="secondary" className="ml-1">
+                  {hasIcp ? `${icpMatchCount.toLocaleString()} match` : "Whole network"}
+                </Badge>
+              )}
+            </AccordionTrigger>
+            <AccordionContent>
+              <IcpEditor
+                campaignId={campaign.id}
+                targeting={t}
+                matchCount={icpMatchCount}
+                accountId={campaign.accountId}
+              />
+            </AccordionContent>
+          </AccordionItem>
 
-        <EnrollmentPanel
-          campaignId={campaign.id}
-          hasIcp={hasIcp}
-          matchCount={icpMatchCount}
-          enrolled={enrolled.map((e) => ({
-            enrollmentId: e.enrollmentId,
-            state: e.state,
-            name: [e.firstName, e.lastName].filter(Boolean).join(" ") || e.headline || "Unknown",
-            headline: e.headline,
-          }))}
-        />
+          <AccordionItem value="enrollment">
+            <AccordionTrigger>
+              <UserPlus className="h-4 w-4 text-muted-foreground" />
+              <span>Enrollment</span>
+              <Badge variant="secondary" className="ml-1">
+                {enrolledTotal.toLocaleString()} enrolled
+              </Badge>
+            </AccordionTrigger>
+            <AccordionContent>
+              <EnrollmentPanel
+                campaignId={campaign.id}
+                hasIcp={hasIcp}
+                matchCount={icpMatchCount}
+                enrolled={enrolled.map((e) => ({
+                  enrollmentId: e.enrollmentId,
+                  state: e.state,
+                  name: [e.firstName, e.lastName].filter(Boolean).join(" ") || e.headline || "Unknown",
+                  headline: e.headline,
+                }))}
+              />
+            </AccordionContent>
+          </AccordionItem>
 
-        <StepsEditor
-          campaignId={campaign.id}
-          steps={steps}
-          templates={tpls}
-          prompts={prompts}
-          editable={editable}
-        />
+          <AccordionItem value="sequences">
+            <AccordionTrigger>
+              <ListOrdered className="h-4 w-4 text-muted-foreground" />
+              <span>Sequence steps</span>
+              <Badge variant="secondary" className="ml-1">
+                {steps.length} {steps.length === 1 ? "step" : "steps"}
+              </Badge>
+            </AccordionTrigger>
+            <AccordionContent>
+              <StepsEditor
+                campaignId={campaign.id}
+                steps={steps}
+                templates={tpls}
+                prompts={prompts}
+                editable={editable}
+              />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
     </>
   );

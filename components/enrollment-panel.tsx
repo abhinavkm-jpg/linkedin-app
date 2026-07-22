@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { UserPlus, Loader2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/status-pill";
 import { enrollMatchingIcp } from "@/app/(dashboard)/campaigns/actions";
@@ -40,15 +39,12 @@ export function EnrollmentPanel({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Enrollment</CardTitle>
-        <CardDescription>
-          Add connections into this campaign. Enroll everyone matching your ICP, or pick people
-          manually from the Connections page.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Add connections into this campaign. Enroll everyone matching your ICP, or pick people
+        manually from the Connections page.
+      </p>
+      <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <Button onClick={enroll} disabled={pending || (matchCount ?? 0) === 0}>
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
@@ -88,7 +84,7 @@ export function EnrollmentPanel({
             </ul>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
