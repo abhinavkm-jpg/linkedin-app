@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Sparkles, Loader2, FileText } from "lucide-react";
+import { Plus, Pencil, Trash2, Sparkles, Loader2, FileText, Send } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ import {
   deleteAiPrompt,
   previewAiMessage,
   previewTemplateForConnection,
+  sendTestMessage,
 } from "@/app/(dashboard)/templates/actions";
 import { ConnectionPicker, type PickedConnection } from "@/components/connection-picker";
 import type { Template, AiPrompt } from "@/db/schema";
@@ -236,10 +237,13 @@ function TemplateDialog({
               Test with a connection — see exactly how it renders. Leave empty to use a sample.
             </p>
             <ConnectionPicker value={picked} onChange={setPicked} />
-            <Button size="sm" variant="outline" onClick={runPreview} disabled={previewing}>
-              {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-              Preview
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={runPreview} disabled={previewing}>
+                {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                Preview
+              </Button>
+              <SendTestButton connection={picked} text={preview} />
+            </div>
             {preview !== null && (
               <div className="rounded-md border bg-background p-3 text-sm">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">
@@ -471,10 +475,13 @@ function PromptDialog({
                 ))}
               </select>
             </div>
-            <Button variant="outline" size="sm" onClick={runPreview} disabled={previewing || !systemPrompt}>
-              {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Generate preview
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={runPreview} disabled={previewing || !systemPrompt}>
+                {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                Generate preview
+              </Button>
+              <SendTestButton connection={picked} text={preview} />
+            </div>
             {preview && (
               <div className="rounded-md border bg-background p-3 text-sm">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">
@@ -500,6 +507,75 @@ function PromptDialog({
 }
 
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Sends the previewed message to the picked connection as a REAL LinkedIn DM,
+ * behind a confirmation dialog. Disabled until a connection is picked and a
+ * message has been previewed.
+ */
+function SendTestButton({
+  connection,
+  text,
+}: {
+  connection: PickedConnection | null;
+  text: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const disabled = !connection || !text?.trim();
+
+  function send() {
+    if (!connection || !text) return;
+    setSending(true);
+    sendTestMessage({ connectionId: connection.id, text })
+      .then((res) => {
+        if (res.error) toast.error(res.error);
+        else {
+          toast.success(`Test message sent to ${connection.name}`);
+          setOpen(false);
+        }
+      })
+      .finally(() => setSending(false));
+  }
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        title={disabled ? "Pick a connection and preview a message first" : undefined}
+      >
+        <Send className="h-4 w-4" /> Send test to contact
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send this as a real message?</DialogTitle>
+            <DialogDescription>
+              This sends a real LinkedIn DM to <strong>{connection?.name}</strong> from your
+              account. It is not a draft.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-48 min-w-0 overflow-y-auto rounded-md border bg-muted/30 p-3 text-sm whitespace-pre-wrap">
+            {text}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={sending}>
+              Cancel
+            </Button>
+            <Button onClick={send} disabled={sending}>
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Yes, send it
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 function DeleteButton({ onDelete }: { onDelete: () => Promise<void> }) {
   const [pending, start] = useTransition();

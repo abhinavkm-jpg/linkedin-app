@@ -4,11 +4,13 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { templates, aiPrompts, connections } from "@/db/schema";
+import { templates, aiPrompts, connections, linkedinAccounts, chats, activities } from "@/db/schema";
 import { generateMessage, type OutreachStep, type ProspectContext } from "@/lib/ai/generate";
 import { renderTemplate, templateVarsFromConnection } from "@/lib/templates";
 import { getConnections } from "@/lib/data-connections";
 import { getAccessibleAccountIds } from "@/lib/access";
+import { sendMessage, startChat, getProfile, UnipileError } from "@/lib/unipile/client";
+import { incrementCounter } from "@/lib/rate-limit";
 
 async function requireUser() {
   const session = await auth();
@@ -56,6 +58,106 @@ async function prospectFromConnection(connectionId: string): Promise<ProspectCon
     summary: c.enrichment?.summary ?? null,
     experience: c.enrichment?.workExperience ?? [],
   };
+}
+
+/**
+ * Send a one-off REAL LinkedIn message to a connection, to test copy/voice.
+ * Mirrors the send engine's message path (existing chat → reply, else start a
+ * new chat) but records a standalone activity — no campaign or enrollment.
+ */
+export async function sendTestMessage(input: {
+  connectionId: string;
+  text: string;
+}): Promise<{ ok?: boolean; error?: string }> {
+  const user = await requireUser();
+  const text = input.text.trim();
+  if (!text) return { error: "Nothing to send — preview a message first." };
+
+  const [conn] = await db
+    .select()
+    .from(connections)
+    .where(eq(connections.id, input.connectionId))
+    .limit(1);
+  if (!conn) return { error: "Connection not found" };
+
+  // Members may only test on accounts assigned to them.
+  const accessibleIds = await getAccessibleAccountIds(user);
+  if (accessibleIds !== null && !accessibleIds.includes(conn.accountId)) {
+    return { error: "You don't have access to this connection's account." };
+  }
+
+  const [account] = await db
+    .select()
+    .from(linkedinAccounts)
+    .where(eq(linkedinAccounts.id, conn.accountId))
+    .limit(1);
+  if (!account) return { error: "Account not found" };
+
+  try {
+    const existing = (
+      await db.select().from(chats).where(eq(chats.connectionId, conn.id)).limit(1)
+    )[0];
+    let chatId: string | undefined = existing?.unipileChatId;
+    let messageId: string | undefined;
+
+    if (chatId) {
+      const res = await sendMessage({ chatId, accountId: account.unipileAccountId, text });
+      messageId = res.message_id ?? res.id;
+    } else {
+      // Resolve the provider id needed to start a new chat.
+      let providerId = conn.providerId;
+      if (!providerId) {
+        const ident = conn.publicIdentifier || conn.memberId;
+        if (ident) {
+          const profile = await getProfile(ident, {
+            accountId: account.unipileAccountId,
+            notify: false,
+          });
+          providerId = profile.provider_id ?? null;
+          if (providerId) {
+            await db
+              .update(connections)
+              .set({ providerId })
+              .where(eq(connections.id, conn.id));
+          }
+        }
+      }
+      if (!providerId) return { error: "Couldn't resolve this person's LinkedIn id to message them." };
+      const res = await startChat({
+        accountId: account.unipileAccountId,
+        attendeesIds: [providerId],
+        text,
+      });
+      chatId = res.chat_id ?? res.id;
+      if (chatId) {
+        await db
+          .insert(chats)
+          .values({
+            accountId: account.id,
+            connectionId: conn.id,
+            unipileChatId: chatId,
+            lastMessageText: text,
+            lastMessageAt: new Date(),
+          })
+          .onConflictDoNothing({ target: chats.unipileChatId });
+      }
+    }
+
+    await incrementCounter(account.id, "message");
+    await db.insert(activities).values({
+      accountId: account.id,
+      connectionId: conn.id,
+      type: "message",
+      status: "success",
+      content: text,
+      unipileChatId: chatId ?? null,
+      unipileMessageId: messageId ?? null,
+    });
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof UnipileError) return { error: `LinkedIn/Unipile error (${e.status})` };
+    return { error: e instanceof Error ? e.message : "Send failed" };
+  }
 }
 
 /** Render a template against a real connection (or the sample when none is picked). */
