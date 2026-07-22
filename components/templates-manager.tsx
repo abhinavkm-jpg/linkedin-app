@@ -197,7 +197,7 @@ function TemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{template ? "Edit template" : "New template"}</DialogTitle>
           <DialogDescription>Use placeholders like {"{{first_name}}"}.</DialogDescription>
@@ -413,7 +413,7 @@ function PromptDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{prompt ? "Edit prompt" : "New AI prompt"}</DialogTitle>
           <DialogDescription>Define the voice and rules for AI-written messages.</DialogDescription>
