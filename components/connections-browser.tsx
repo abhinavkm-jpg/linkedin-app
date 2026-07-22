@@ -11,13 +11,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { StatusPill } from "@/components/status-pill";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuCheckboxItem,
-} from "@/components/ui/dropdown-menu";
-import {
   Table,
   TableBody,
   TableCell,
@@ -93,6 +86,7 @@ export function ConnectionsBrowser({
   const [campaignId, setCampaignId] = useState("");
   const [pending, start] = useTransition();
   const [cols, setCols] = useState<Set<ColKey>>(new Set(DEFAULT_COLS));
+  const [colsOpen, setColsOpen] = useState(false);
 
   const accountName = new Map(accounts.map((a) => [a.id, a.name]));
 
@@ -243,28 +237,29 @@ export function ConnectionsBrowser({
           ))}
         </select>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="outline" size="sm">
-                <SlidersHorizontal className="h-4 w-4" /> Columns
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuLabel>Show columns</DropdownMenuLabel>
-            {COLUMNS.map((c) => (
-              <DropdownMenuCheckboxItem
-                key={c.key}
-                checked={cols.has(c.key)}
-                onCheckedChange={() => toggleCol(c.key)}
-                closeOnClick={false}
-              >
-                {c.label}
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="relative">
+          <Button variant="outline" size="sm" onClick={() => setColsOpen((o) => !o)}>
+            <SlidersHorizontal className="h-4 w-4" /> Columns
+          </Button>
+          {colsOpen && (
+            <>
+              {/* click-away overlay */}
+              <div className="fixed inset-0 z-40" onClick={() => setColsOpen(false)} />
+              <div className="absolute right-0 z-50 mt-1 w-52 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+                <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Show columns</p>
+                {COLUMNS.map((c) => (
+                  <label
+                    key={c.key}
+                    className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-muted/60"
+                  >
+                    <Checkbox checked={cols.has(c.key)} onCheckedChange={() => toggleCol(c.key)} />
+                    {c.label}
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Bulk action bar */}
