@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Sparkles, Loader2, FileText } from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,8 +57,8 @@ function TemplatesSection({ templates }: { templates: Template[] }) {
     <section className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Templates
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <FileText className="h-4 w-4" /> Templates
           </h2>
           <p className="text-xs text-muted-foreground">
             Reusable copy with {"{{first_name}}"}, {"{{company}}"}, {"{{position}}"} placeholders.
@@ -75,11 +76,21 @@ function TemplatesSection({ templates }: { templates: Template[] }) {
       </div>
 
       {templates.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            No templates yet.
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={FileText}
+          title="No templates yet"
+          description="Create reusable message or invite copy with placeholders like {{first_name}}."
+        >
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditing(null);
+              setOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" /> New template
+          </Button>
+        </EmptyState>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {templates.map((t) => (
@@ -214,8 +225,8 @@ function PromptsSection({ prompts }: { prompts: AiPrompt[] }) {
     <section className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            AI prompts
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <Sparkles className="h-4 w-4" /> AI prompts
           </h2>
           <p className="text-xs text-muted-foreground">
             System prompts that define the voice for AI-generated outreach.
@@ -233,11 +244,21 @@ function PromptsSection({ prompts }: { prompts: AiPrompt[] }) {
       </div>
 
       {prompts.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            No AI prompts yet. Seed one with <code>npm run db:seed</code> or create one here.
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Sparkles}
+          title="No AI prompts yet"
+          description="Define the voice and rules for AI-generated outreach, or seed the default with npm run db:seed."
+        >
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditing(null);
+              setOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" /> New prompt
+          </Button>
+        </EmptyState>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {prompts.map((p) => (

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Contact, Megaphone, MessageSquare, Send } from "lucide-react";
+import { Contact, Megaphone, MessageSquare, Send, Users } from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { QuotaGauge } from "@/components/quota-gauge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,16 +64,15 @@ export default async function DashboardPage() {
           </div>
 
           {data.length === 0 && !error ? (
-            <Card>
-              <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
-                <p className="text-sm text-muted-foreground">
-                  No LinkedIn accounts connected yet.
-                </p>
-                <Button render={<Link href="/accounts" />} size="sm">
-                  Connect an account
-                </Button>
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={Users}
+              title="No accounts connected yet"
+              description="Connect or import a LinkedIn account to start syncing connections and running campaigns."
+            >
+              <Button render={<Link href="/accounts" />} size="sm">
+                Connect an account
+              </Button>
+            </EmptyState>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {data.map((a) => (

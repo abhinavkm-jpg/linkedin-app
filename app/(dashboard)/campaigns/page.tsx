@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CampaignCreateDialog } from "@/components/campaign-create-dialog";
+import { EmptyState } from "@/components/empty-state";
+import { Megaphone } from "lucide-react";
 import { db } from "@/db";
 import { campaigns, linkedinAccounts, enrollments } from "@/db/schema";
 import { auth } from "@/auth";
@@ -83,15 +85,17 @@ export default async function CampaignsPage() {
             <CardContent className="py-4 text-sm text-destructive">{error}</CardContent>
           </Card>
         ) : rows.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-              <p className="text-sm text-muted-foreground">
-                No campaigns yet.{" "}
-                {accounts.length === 0 && "Connect an account first."}
-              </p>
-              {accounts.length > 0 && <CampaignCreateDialog accounts={accounts} />}
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={Megaphone}
+            title="No campaigns yet"
+            description={
+              accounts.length === 0
+                ? "Connect a LinkedIn account first, then create a campaign to start reaching out."
+                : "Create a campaign, set your ICP, enroll connections, and start the sequence."
+            }
+          >
+            {accounts.length > 0 && <CampaignCreateDialog accounts={accounts} />}
+          </EmptyState>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {rows.map((c) => (

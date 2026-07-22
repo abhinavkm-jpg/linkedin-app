@@ -4,8 +4,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, MessageSquare } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -42,10 +43,11 @@ export function InboxList({ chats }: { chats: InboxRow[] }) {
 
   if (chats.length === 0) {
     return (
-      <Card className="flex flex-col items-center gap-1 py-16 text-center">
-        <p className="text-sm font-medium">No conversations yet</p>
-        <p className="text-sm text-muted-foreground">Replies from your prospects will appear here.</p>
-      </Card>
+      <EmptyState
+        icon={MessageSquare}
+        title="No conversations yet"
+        description="Replies from your prospects will show up here as soon as they come in."
+      />
     );
   }
 

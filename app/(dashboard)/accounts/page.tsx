@@ -3,6 +3,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ConnectAccountButton } from "@/components/connect-account-button";
 import { ImportAccountsButton } from "@/components/import-accounts-button";
 import { AccountCard } from "@/components/account-card";
+import { EmptyState } from "@/components/empty-state";
+import { Users } from "lucide-react";
 import { getAccountsWithStats } from "@/lib/data";
 import { auth } from "@/auth";
 import { isAdmin } from "@/lib/access";
@@ -51,16 +53,17 @@ export default async function AccountsPage() {
         )}
 
         {accounts.length === 0 && !error ? (
-          <Card>
-            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-              <p className="text-sm text-muted-foreground">
-                {admin
-                  ? "No accounts yet. Import the LinkedIn accounts connected in your Unipile workspace."
-                  : "No accounts assigned to you yet. Connect your own LinkedIn account, or ask an admin to assign one."}
-              </p>
-              {admin ? <ImportAccountsButton /> : <ConnectAccountButton />}
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={Users}
+            title={admin ? "No accounts connected" : "No accounts assigned"}
+            description={
+              admin
+                ? "Import the LinkedIn accounts already connected in your Unipile workspace, or connect a new one."
+                : "Connect your own LinkedIn account, or ask an admin to assign one to you."
+            }
+          >
+            {admin ? <ImportAccountsButton /> : <ConnectAccountButton />}
+          </EmptyState>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {accounts.map((a) => (
