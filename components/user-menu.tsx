@@ -1,4 +1,8 @@
-import { signOut } from "@/auth";
+"use client";
+
+import { useState } from "react";
+import { signOut } from "next-auth/react";
+import { LogOut, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -20,6 +24,8 @@ export function UserMenu({
   image?: string | null;
   role?: string;
 }) {
+  const [signingOut, setSigningOut] = useState(false);
+
   const initials = (name || email || "?")
     .split(" ")
     .map((s) => s[0])
@@ -42,19 +48,22 @@ export function UserMenu({
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="truncate">{email}</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <form
-          action={async () => {
-            "use server";
-            await signOut({ redirectTo: "/login" });
+        <DropdownMenuItem
+          disabled={signingOut}
+          closeOnClick={false}
+          className="w-full cursor-pointer"
+          onClick={() => {
+            setSigningOut(true);
+            void signOut({ redirectTo: "/login" });
           }}
         >
-          <DropdownMenuItem
-            render={<button type="submit" />}
-            className="w-full cursor-pointer"
-          >
-            Sign out
-          </DropdownMenuItem>
-        </form>
+          {signingOut ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <LogOut className="h-4 w-4" />
+          )}
+          Sign out
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
