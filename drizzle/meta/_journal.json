@@ -29,6 +29,13 @@
       "when": 1784635685898,
       "tag": "0003_fine_silverclaw",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784711931811,
+      "tag": "0004_uneven_sabretooth",
+      "breakpoints": true
     }
   ]
 }

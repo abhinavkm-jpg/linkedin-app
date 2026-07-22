@@ -263,6 +263,9 @@ export const campaigns = pgTable("campaigns", {
   // When true, each connection can be enrolled/messaged only once in this
   // campaign ("unique DMs"). When false, repeats are allowed ("multi DMs").
   dedupeContacts: boolean("dedupe_contacts").notNull().default(true),
+  // When true (and the campaign is active), a background job keeps enrolling
+  // all matching connections automatically — no manual "Enroll" clicks.
+  autoEnroll: boolean("auto_enroll").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

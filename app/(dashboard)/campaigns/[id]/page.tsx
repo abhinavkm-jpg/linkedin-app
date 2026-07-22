@@ -126,6 +126,7 @@ export default async function CampaignDetailPage({
           status={campaign.status}
           reviewBeforeSend={campaign.reviewBeforeSend}
           dedupeContacts={campaign.dedupeContacts}
+          autoEnroll={campaign.autoEnroll}
           hasSteps={steps.length > 0}
           stateCounts={stateCountsNum}
         />
@@ -182,6 +183,7 @@ export default async function CampaignDetailPage({
               <EnrollmentPanel
                 campaignId={campaign.id}
                 hasIcp={hasIcp}
+                autoEnroll={campaign.autoEnroll}
                 matchCount={icpMatchCount}
                 enrolled={enrolled.map((e) => ({
                   enrollmentId: e.enrollmentId,

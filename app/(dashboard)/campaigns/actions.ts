@@ -114,6 +114,7 @@ export async function updateCampaign(
     reviewBeforeSend?: boolean;
     targeting?: CampaignTargeting;
     dedupeContacts?: boolean;
+    autoEnroll?: boolean;
   },
 ): Promise<void> {
   await requireUser();
@@ -122,8 +123,12 @@ export async function updateCampaign(
   if (input.reviewBeforeSend !== undefined) set.reviewBeforeSend = input.reviewBeforeSend;
   if (input.targeting !== undefined) set.targeting = input.targeting;
   if (input.dedupeContacts !== undefined) set.dedupeContacts = input.dedupeContacts;
+  if (input.autoEnroll !== undefined) set.autoEnroll = input.autoEnroll;
   if (Object.keys(set).length === 0) return;
   await db.update(campaigns).set(set).where(eq(campaigns.id, id));
+
+  // Turning auto-enroll on: kick a run now so the queue fills immediately.
+  if (input.autoEnroll === true) await enqueueJob("auto-enroll", { campaignId: id });
 
   // Turning review off releases any drafts parked "awaiting review".
   if (input.reviewBeforeSend === false) await resumeEnrollments(id);

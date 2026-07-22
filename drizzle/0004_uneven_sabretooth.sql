@@ -1,0 +1,1 @@
+ALTER TABLE "campaigns" ADD COLUMN "auto_enroll" boolean DEFAULT true NOT NULL;

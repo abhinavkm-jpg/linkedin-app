@@ -29,6 +29,7 @@ export function CampaignHeader({
   status,
   reviewBeforeSend,
   dedupeContacts,
+  autoEnroll,
   hasSteps,
   stateCounts,
 }: {
@@ -37,6 +38,7 @@ export function CampaignHeader({
   status: string;
   reviewBeforeSend: boolean;
   dedupeContacts: boolean;
+  autoEnroll: boolean;
   hasSteps: boolean;
   stateCounts: { state: string; n: number }[];
 }) {
@@ -68,6 +70,16 @@ export function CampaignHeader({
       await updateCampaign(id, { dedupeContacts: next });
       toast.success(
         next ? "Each person will be messaged once" : "Multi DMs on — people can be messaged repeatedly",
+      );
+      router.refresh();
+    });
+  }
+
+  function toggleAutoEnroll(next: boolean) {
+    start(async () => {
+      await updateCampaign(id, { autoEnroll: next });
+      toast.success(
+        next ? "Auto-enroll on — matching connections are added automatically" : "Auto-enroll off",
       );
       router.refresh();
     });
@@ -123,6 +135,15 @@ export function CampaignHeader({
           <Badge variant={statusTone[status] ?? "outline"}>{status}</Badge>
 
           <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={autoEnroll}
+                onChange={(e) => toggleAutoEnroll(e.target.checked)}
+                disabled={pending}
+              />
+              Auto-enroll matching connections
+            </label>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

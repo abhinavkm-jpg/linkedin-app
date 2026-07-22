@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { UserPlus, Loader2 } from "lucide-react";
+import { UserPlus, Loader2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/status-pill";
 import { enrollMatchingIcp } from "@/app/(dashboard)/campaigns/actions";
@@ -12,11 +12,13 @@ import { enrollMatchingIcp } from "@/app/(dashboard)/campaigns/actions";
 export function EnrollmentPanel({
   campaignId,
   hasIcp,
+  autoEnroll,
   matchCount,
   enrolled,
 }: {
   campaignId: string;
   hasIcp: boolean;
+  autoEnroll: boolean;
   matchCount: number | null;
   enrolled: { enrollmentId: string; state: string; name: string; headline: string | null }[];
 }) {
@@ -44,6 +46,15 @@ export function EnrollmentPanel({
         Add connections into this campaign. Enroll everyone matching your ICP, or pick people
         manually from the Connections page.
       </p>
+      {autoEnroll && (
+        <div className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+          <Zap className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <span>
+            Auto-enroll is <span className="font-medium">on</span> — matching connections are added
+            automatically in the background. You can still enroll now to fill the queue immediately.
+          </span>
+        </div>
+      )}
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <Button onClick={enroll} disabled={pending || (matchCount ?? 0) === 0}>
