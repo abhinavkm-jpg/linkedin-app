@@ -102,10 +102,10 @@ export default async function DashboardPage() {
 }
 
 const TONES: Record<string, string> = {
-  blue: "bg-blue-50 text-blue-600 ring-blue-100",
-  violet: "bg-violet-50 text-violet-600 ring-violet-100",
-  emerald: "bg-emerald-50 text-emerald-600 ring-emerald-100",
-  amber: "bg-amber-50 text-amber-600 ring-amber-100",
+  blue: "bg-blue-50 text-blue-600 ring-blue-100 dark:bg-blue-400/10 dark:text-blue-300 dark:ring-blue-400/20",
+  violet: "bg-violet-50 text-violet-600 ring-violet-100 dark:bg-violet-400/10 dark:text-violet-300 dark:ring-violet-400/20",
+  emerald: "bg-emerald-50 text-emerald-600 ring-emerald-100 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/20",
+  amber: "bg-amber-50 text-amber-600 ring-amber-100 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/20",
 };
 
 function StatCard({

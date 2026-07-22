@@ -167,18 +167,31 @@ export async function POST(req: Request) {
 
     // 4) Inbound message → reply. Detect inbound vs our own send.
     if (event === "message_received" || source === "messaging") {
-      const sender = body.sender as { attendee_provider_id?: string; attendee_name?: string } | undefined;
+      const sender = body.sender as
+        | { attendee_provider_id?: string; attendee_name?: string; attendee_public_identifier?: string }
+        | undefined;
       const ownerId =
         (body.account_info as { user_id?: string } | undefined)?.user_id ?? account.ownerProviderId;
       const senderProviderId = sender?.attendee_provider_id;
-      const isInbound = senderProviderId && ownerId ? senderProviderId !== ownerId : true;
+      // `is_sender` is authoritative: true = our account sent it, false = inbound reply.
+      // Fall back to comparing the sender against the account owner's provider id.
+      const isInbound =
+        typeof body.is_sender === "boolean"
+          ? body.is_sender === false
+          : senderProviderId && ownerId
+            ? senderProviderId !== ownerId
+            : true;
       const chatId = body.chat_id as string | undefined;
       const text = body.message as string | undefined;
 
-      // Try to associate with a known connection by sender provider id.
-      const conn = senderProviderId
-        ? await findConnection(account.id, { providerId: senderProviderId })
-        : undefined;
+      // Resolve the connection. Prefer the chat link we recorded on our own
+      // outbound send (most reliable), then fall back to sender identity.
+      const conn =
+        (chatId ? await connectionForChat(chatId) : undefined) ??
+        (await findConnection(account.id, {
+          providerId: senderProviderId,
+          publicId: sender?.attendee_public_identifier ?? undefined,
+        }));
 
       if (chatId) {
         await db
@@ -200,6 +213,8 @@ export async function POST(req: Request) {
               lastMessageAt: new Date(),
               ...(isInbound ? { unreadCount: sql`${chats.unreadCount} + 1` } : {}),
               ...(conn?.id ? { connectionId: conn.id } : {}),
+              ...(sender?.attendee_name ? { attendeeName: sender.attendee_name } : {}),
+              ...(senderProviderId ? { attendeeProviderId: senderProviderId } : {}),
             },
           });
       }
@@ -209,14 +224,15 @@ export async function POST(req: Request) {
           .update(connections)
           .set({ relationshipStatus: "replied" })
           .where(eq(connections.id, conn.id));
-        // Stop any active sequence for this connection.
+        // A reply stops the sequence AND is worth surfacing even if the
+        // sequence already finished — so `replied` overrides `completed` too.
         await db
           .update(enrollments)
-          .set({ state: "replied" })
+          .set({ state: "replied", nextRunAt: null })
           .where(
             and(
               eq(enrollments.connectionId, conn.id),
-              sql`${enrollments.state} not in ('completed','failed','skipped')`,
+              sql`${enrollments.state} not in ('replied','failed','skipped')`,
             ),
           );
       }
@@ -228,6 +244,23 @@ export async function POST(req: Request) {
     console.error("[webhook] processing error", e);
     return NextResponse.json({ error: "processing failed" }, { status: 500 });
   }
+}
+
+/** Resolve the connection linked to a chat we already recorded (e.g. on our own send). */
+async function connectionForChat(unipileChatId: string) {
+  const rows = await db
+    .select({ connectionId: chats.connectionId })
+    .from(chats)
+    .where(eq(chats.unipileChatId, unipileChatId))
+    .limit(1);
+  const connId = rows[0]?.connectionId;
+  if (!connId) return undefined;
+  const conn = await db
+    .select()
+    .from(connections)
+    .where(eq(connections.id, connId))
+    .limit(1);
+  return conn[0];
 }
 
 async function findConnection(

@@ -171,7 +171,7 @@ export function CampaignHeader({
         )}
 
         {!hasSteps && (
-          <p className="text-sm text-amber-600">
+          <p className="text-sm text-amber-600 dark:text-amber-400">
             Add at least one sequence step below before activating.
           </p>
         )}
