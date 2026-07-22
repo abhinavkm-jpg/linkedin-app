@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/settings";
 
 export type JobName =
   | "sync"
+  | "sync-all"
   | "enrich"
   | "send"
   | "poll-acceptance"
@@ -45,6 +46,7 @@ function wantedSchedules(base: string) {
     { path: "send", cron: "*/15 * * * *" }, // process due follow-ups every 15 min
     { path: "auto-enroll", cron: "*/30 * * * *" }, // top up active campaigns every 30 min
     { path: "auto-enrich", cron: "10 0 * * *" }, // daily kickstart; the job self-paces ~1/min
+    { path: "sync-all", cron: "0 2 * * *" }, // daily connection resync (detect new connections)
     { path: "poll-acceptance", cron: "0 9,13,17 * * *" }, // backup accept detection
   ].map((w) => ({ ...w, destination: `${base}/api/jobs/${w.path}` }));
 }

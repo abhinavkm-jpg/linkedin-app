@@ -17,6 +17,7 @@ export function SchedulesCard({ schedules }: { schedules: ScheduleInfo[] }) {
     { match: "/api/jobs/send", label: "send tick" },
     { match: "/api/jobs/auto-enroll", label: "auto-enroll" },
     { match: "/api/jobs/auto-enrich", label: "auto-enrich" },
+    { match: "/api/jobs/sync-all", label: "connection sync" },
     { match: "/api/jobs/poll-acceptance", label: "acceptance poll" },
   ];
   const labelFor = (destination: string) =>
