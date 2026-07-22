@@ -3,7 +3,13 @@ import { Client } from "@upstash/qstash";
 import { env } from "@/lib/env";
 import { getSettings } from "@/lib/settings";
 
-export type JobName = "sync" | "enrich" | "send" | "poll-acceptance" | "auto-enroll";
+export type JobName =
+  | "sync"
+  | "enrich"
+  | "send"
+  | "poll-acceptance"
+  | "auto-enroll"
+  | "auto-enrich";
 
 /**
  * Enqueue a background job via QStash, which POSTs to our signed job endpoint.
@@ -38,6 +44,7 @@ function wantedSchedules(base: string) {
   return [
     { path: "send", cron: "*/15 * * * *" }, // process due follow-ups every 15 min
     { path: "auto-enroll", cron: "*/30 * * * *" }, // top up active campaigns every 30 min
+    { path: "auto-enrich", cron: "*/30 * * * *" }, // daily profile enrichment, spread out
     { path: "poll-acceptance", cron: "0 9,13,17 * * *" }, // backup accept detection
   ].map((w) => ({ ...w, destination: `${base}/api/jobs/${w.path}` }));
 }

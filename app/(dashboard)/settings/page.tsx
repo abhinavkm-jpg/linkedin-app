@@ -149,6 +149,7 @@ export default async function SettingsPage() {
                         dailyMessageCap: a.dailyMessageCap,
                         dailyInmailCap: a.dailyInmailCap,
                         dailyEnrichCap: a.dailyEnrichCap,
+                        autoEnrichDailyCap: a.autoEnrichDailyCap,
                       }}
                     />
                   </div>

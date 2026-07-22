@@ -139,6 +139,10 @@ export const linkedinAccounts = pgTable(
     dailyMessageCap: integer("daily_message_cap").notNull().default(100),
     dailyInmailCap: integer("daily_inmail_cap").notNull().default(40),
     dailyEnrichCap: integer("daily_enrich_cap").notNull().default(100),
+    // Proactive daily profile enrichment (its own budget, separate from the
+    // send-time enrichment cap). Off by default; enrich this many per day.
+    autoEnrich: boolean("auto_enrich").notNull().default(false),
+    autoEnrichDailyCap: integer("auto_enrich_daily_cap").notNull().default(150),
     // Connection sync state.
     syncStatus: syncStatusEnum("sync_status").notNull().default("idle"),
     syncCursor: text("sync_cursor"),
@@ -180,6 +184,9 @@ export const connections = pgTable(
     company: text("company"),
     position: text("position"),
     enrichment: jsonb("enrichment").$type<ConnectionEnrichment | null>(),
+    // Lowercased searchable blob (headline + position + company + latest job
+    // description + About) used for enriched ICP keyword matching.
+    enrichedText: text("enriched_text"),
     enrichedAt: timestamp("enriched_at", { withTimezone: true }),
     // Outreach state
     tags: text("tags")
@@ -209,6 +216,7 @@ export type ConnectionEnrichment = {
     position?: string | null;
     company?: string | null;
     current?: boolean | null;
+    description?: string | null;
   }>;
   raw?: unknown;
 };
@@ -378,6 +386,7 @@ export const dailyCounters = pgTable(
     messagesSent: integer("messages_sent").notNull().default(0),
     inmailsSent: integer("inmails_sent").notNull().default(0),
     enrichments: integer("enrichments").notNull().default(0),
+    autoEnrichments: integer("auto_enrichments").notNull().default(0),
   },
   (t) => [uniqueIndex("daily_counters_account_day_idx").on(t.accountId, t.day)],
 );

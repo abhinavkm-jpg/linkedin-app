@@ -101,10 +101,23 @@ export async function updateAccountCaps(
     dailyMessageCap?: number;
     dailyInmailCap?: number;
     dailyEnrichCap?: number;
+    autoEnrichDailyCap?: number;
   },
 ): Promise<void> {
   await requireAdmin();
   await db.update(linkedinAccounts).set(caps).where(eq(linkedinAccounts.id, accountId));
+  revalidatePath("/accounts");
+  revalidatePath("/");
+}
+
+/** Toggle proactive daily enrichment for an account. Turning it on runs a batch now. */
+export async function setAccountAutoEnrich(accountId: string, enabled: boolean): Promise<void> {
+  await requireAdmin();
+  await db
+    .update(linkedinAccounts)
+    .set({ autoEnrich: enabled })
+    .where(eq(linkedinAccounts.id, accountId));
+  if (enabled) await enqueueJob("auto-enrich", {});
   revalidatePath("/accounts");
   revalidatePath("/");
 }

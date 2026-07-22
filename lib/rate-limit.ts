@@ -3,24 +3,28 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { dailyCounters, linkedinAccounts } from "@/db/schema";
 
-export type SendKind = "invite" | "message" | "inmail" | "enrich";
+export type SendKind = "invite" | "message" | "inmail" | "enrich" | "autoEnrich";
 
-/** Workspace-wide daily ceiling on profile-enrichment API calls. */
+/** Workspace-wide daily ceiling on send-time profile-enrichment API calls. */
 export const GLOBAL_DAILY_ENRICH_CAP = 200;
 
-const COLUMN: Record<SendKind, "invitesSent" | "messagesSent" | "inmailsSent" | "enrichments"> =
-  {
-    invite: "invitesSent",
-    message: "messagesSent",
-    inmail: "inmailsSent",
-    enrich: "enrichments",
-  };
+const COLUMN: Record<
+  SendKind,
+  "invitesSent" | "messagesSent" | "inmailsSent" | "enrichments" | "autoEnrichments"
+> = {
+  invite: "invitesSent",
+  message: "messagesSent",
+  inmail: "inmailsSent",
+  enrich: "enrichments",
+  autoEnrich: "autoEnrichments",
+};
 
 const CAP_COLUMN: Record<SendKind, keyof typeof linkedinAccounts.$inferSelect> = {
   invite: "dailyInviteCap",
   message: "dailyMessageCap",
   inmail: "dailyInmailCap",
   enrich: "dailyEnrichCap",
+  autoEnrich: "autoEnrichDailyCap",
 };
 
 /** Current day as YYYY-MM-DD (UTC) — the bucket key for counters. */
@@ -74,6 +78,7 @@ export async function getQuotaStatus(
     message: build("message"),
     inmail: build("inmail"),
     enrich: build("enrich"),
+    autoEnrich: build("autoEnrich"),
   };
 }
 

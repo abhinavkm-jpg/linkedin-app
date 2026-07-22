@@ -103,10 +103,12 @@ export async function getIcpMatches(
 
   const keywords = (targeting.titleKeywords ?? []).map((k) => k.trim()).filter(Boolean);
   if (keywords.length > 0) {
+    // Match against the enriched search blob (title + job description + company
+    // + About), OR the headline for connections not yet enriched.
     const kwClause = or(
       ...keywords.flatMap((kw) => [
+        ilike(connections.enrichedText, `%${kw}%`),
         ilike(connections.headline, `%${kw}%`),
-        ilike(connections.position, `%${kw}%`),
       ]),
     );
     if (kwClause) clauses.push(kwClause);
@@ -142,6 +144,8 @@ export async function getIcpMatches(
       .select({ id: connections.id })
       .from(connections)
       .where(where)
+      // Enriched connections first — they matched on real data and are ready to send.
+      .orderBy(sql`${connections.enrichedAt} desc nulls last`)
       .limit(opts.idLimit ?? 1000),
   ]);
 

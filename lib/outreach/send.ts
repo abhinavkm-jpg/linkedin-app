@@ -20,8 +20,8 @@ import { canSend, canEnrichNow, incrementCounter } from "@/lib/rate-limit";
 import { sendInvitation, startChat, sendMessage, getProfile, UnipileError } from "@/lib/unipile/client";
 import { renderTemplate, templateVarsFromConnection } from "@/lib/templates";
 import { generateMessage, type OutreachStep, type ProspectContext } from "@/lib/ai/generate";
-import { pickLatestJob, connectionMatchesIcp, hasIcp } from "@/lib/icp";
-import type { ConnectionEnrichment } from "@/db/schema";
+import { connectionMatchesIcp, hasIcp } from "@/lib/icp";
+import { enrichConnectionRow } from "@/lib/outreach/enrich";
 
 export type Enrollment = typeof enrollments.$inferSelect;
 
@@ -88,7 +88,7 @@ export async function processEnrollment(enr: Enrollment): Promise<boolean> {
         return false;
       }
       try {
-        conn = await enrichConnection(conn, account);
+        conn = await enrichConnectionRow(conn, account, { counter: "enrich" });
       } catch (e) {
         if (e instanceof UnipileError && e.isRateLimited) {
           await db
@@ -344,48 +344,6 @@ function aiStepLabel(step: SequenceStep, steps: SequenceStep[]): OutreachStep {
   const messageSteps = steps.filter((s) => s.type === "message");
   const idx = messageSteps.findIndex((s) => s.id === step.id);
   return (["welcome", "follow_up_1", "follow_up_2", "follow_up_3"][idx] ?? "follow_up_3") as OutreachStep;
-}
-
-/**
- * Enrich a connection via the profile API (experience + about) and persist the
- * current role, company, summary, country, and provider id. Throws on API
- * error so callers can distinguish rate-limits from other failures.
- */
-async function enrichConnection(conn: Connection, account: LinkedinAccount): Promise<Connection> {
-  const identifier = conn.publicIdentifier || conn.providerId || conn.memberId;
-  if (!identifier) return conn;
-
-  const profile = await getProfile(identifier, {
-    accountId: account.unipileAccountId,
-    sections: ["experience", "about"],
-    notify: false,
-  });
-  await incrementCounter(account.id, "enrich");
-
-  const { position, company } = pickLatestJob(profile.work_experience ?? []);
-  const enrichment: ConnectionEnrichment = {
-    summary: profile.summary ?? null,
-    workExperience: (profile.work_experience ?? []).slice(0, 6).map((e) => ({
-      position: e.position ?? null,
-      company: e.company ?? null,
-      current: e.current ?? null,
-    })),
-  };
-
-  const [updated] = await db
-    .update(connections)
-    .set({
-      providerId: profile.provider_id ?? conn.providerId,
-      company: company ?? conn.company,
-      position: position ?? conn.position,
-      locationCountry: profile.primary_locale?.country ?? conn.locationCountry,
-      enrichment,
-      enrichedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(connections.id, conn.id))
-    .returning();
-  return updated ?? conn;
 }
 
 async function ensureProviderId(conn: Connection, account: LinkedinAccount): Promise<string | null> {

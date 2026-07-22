@@ -8,9 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { QuotaGauge } from "@/components/quota-gauge";
 import { accountStatusTone } from "@/lib/status";
-import { startSync, assignAccountOwner } from "@/app/(dashboard)/accounts/actions";
+import { startSync, assignAccountOwner, setAccountAutoEnrich } from "@/app/(dashboard)/accounts/actions";
 import type { AccountWithStats } from "@/lib/data";
 
 export function AccountCard({
@@ -46,6 +47,21 @@ export function AccountCard({
     });
   }
 
+  function toggleAutoEnrich(next: boolean) {
+    start(async () => {
+      try {
+        await setAccountAutoEnrich(account.id, next);
+        toast.success(
+          next
+            ? `Auto-enrich on — enriching up to ${account.autoEnrichDailyCap}/day`
+            : "Auto-enrich off",
+        );
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to update");
+      }
+    });
+  }
+
   return (
     <Card>
       <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
@@ -66,7 +82,28 @@ export function AccountCard({
           <QuotaGauge label="Messages / day" used={account.quotas.message.used} cap={account.quotas.message.cap} />
           <QuotaGauge label="InMail / day" used={account.quotas.inmail.used} cap={account.quotas.inmail.cap} />
           <QuotaGauge label="Enrichments / day" used={account.quotas.enrich.used} cap={account.quotas.enrich.cap} />
+          <QuotaGauge
+            label="Auto-enrich / day"
+            used={account.quotas.autoEnrich.used}
+            cap={account.quotas.autoEnrich.cap}
+          />
         </div>
+
+        {isAdmin && (
+          <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md border px-3 py-2">
+            <span className="text-sm">
+              <span className="font-medium">Auto-enrich daily</span>
+              <span className="block text-xs text-muted-foreground">
+                Fill in job title, company &amp; country for ICP — {account.autoEnrichDailyCap}/day.
+              </span>
+            </span>
+            <Switch
+              checked={account.autoEnrich}
+              onCheckedChange={toggleAutoEnrich}
+              disabled={pending}
+            />
+          </label>
+        )}
 
         {isAdmin && (
           <div className="space-y-1.5">

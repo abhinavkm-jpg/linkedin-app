@@ -18,6 +18,7 @@ export function CapsEditor({
     dailyMessageCap: number;
     dailyInmailCap: number;
     dailyEnrichCap: number;
+    autoEnrichDailyCap: number;
   };
 }) {
   const [caps, setCaps] = useState(initial);
@@ -46,11 +47,12 @@ export function CapsEditor({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {field("dailyInviteCap", "Invites / day")}
         {field("dailyMessageCap", "Messages / day")}
         {field("dailyInmailCap", "InMail / day")}
-        {field("dailyEnrichCap", "Enrichments / day")}
+        {field("dailyEnrichCap", "Enrich / day")}
+        {field("autoEnrichDailyCap", "Auto-enrich / day")}
       </div>
       <Button size="sm" onClick={save} disabled={pending}>
         {pending && <Loader2 className="h-4 w-4 animate-spin" />}

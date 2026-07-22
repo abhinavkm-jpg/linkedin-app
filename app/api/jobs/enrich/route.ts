@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { connections, linkedinAccounts } from "@/db/schema";
 import { readJob } from "@/lib/jobs";
-import { canEnrichNow, incrementCounter } from "@/lib/rate-limit";
-import { getProfile, UnipileError } from "@/lib/unipile/client";
-import { pickLatestJob } from "@/lib/icp";
-import type { ConnectionEnrichment } from "@/db/schema";
+import { canEnrichNow } from "@/lib/rate-limit";
+import { UnipileError } from "@/lib/unipile/client";
+import { enrichConnectionRow } from "@/lib/outreach/enrich";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,35 +48,7 @@ export async function POST(req: Request) {
     if (!identifier) continue;
 
     try {
-      const profile = await getProfile(identifier, {
-        accountId: account.unipileAccountId,
-        sections: ["experience", "about"],
-        notify: false,
-      });
-      await incrementCounter(account.id, "enrich");
-
-      const { position, company } = pickLatestJob(profile.work_experience ?? []);
-      const enrichment: ConnectionEnrichment = {
-        summary: profile.summary ?? null,
-        workExperience: (profile.work_experience ?? []).slice(0, 6).map((e) => ({
-          position: e.position ?? null,
-          company: e.company ?? null,
-          current: e.current ?? null,
-        })),
-      };
-
-      await db
-        .update(connections)
-        .set({
-          providerId: profile.provider_id ?? conn.providerId,
-          company: company ?? conn.company,
-          position: position ?? conn.position,
-          locationCountry: profile.primary_locale?.country ?? conn.locationCountry,
-          enrichment,
-          enrichedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(connections.id, conn.id));
+      await enrichConnectionRow(conn, account, { counter: "enrich" });
       enriched++;
     } catch (e) {
       if (e instanceof UnipileError && (e.isRateLimited || e.status === 429)) {
