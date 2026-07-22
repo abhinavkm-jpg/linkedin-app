@@ -71,14 +71,14 @@ export function EnrollmentPanel({
           ) : (
             <ul className="divide-y rounded-md border">
               {enrolled.map((e) => (
-                <li key={e.enrollmentId} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                  <div className="min-w-0">
-                    <span className="font-medium">{e.name}</span>
+                <li key={e.enrollmentId} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{e.name}</p>
                     {e.headline && (
-                      <span className="ml-2 truncate text-muted-foreground">{e.headline}</span>
+                      <p className="truncate text-xs text-muted-foreground">{e.headline}</p>
                     )}
                   </div>
-                  <StatusPill status={e.state} />
+                  <StatusPill status={e.state} className="shrink-0" />
                 </li>
               ))}
             </ul>
