@@ -19,6 +19,22 @@ interface StepValues {
   stopOnReply: boolean;
 }
 
+/** Show a stored hours value in the friendliest unit (whole days when it divides evenly). */
+function splitDelay(hours: number): { value: number; unit: "hours" | "days" } {
+  if (hours > 0 && hours % 24 === 0) return { value: hours / 24, unit: "days" };
+  return { value: hours, unit: "hours" };
+}
+
+/** Human-readable delay for the step list: "immediately", "3 days", "12h". */
+function formatDelay(hours: number): string {
+  if (hours <= 0) return "immediately";
+  if (hours % 24 === 0) {
+    const d = hours / 24;
+    return `${d} day${d === 1 ? "" : "s"}`;
+  }
+  return `${hours}h`;
+}
+
 export function StepsEditor({
   campaignId,
   steps,
@@ -49,6 +65,7 @@ export function StepsEditor({
                   <StepForm
                     templates={templates}
                     prompts={prompts}
+                    isFirstStep={i === 0}
                     initial={{
                       type: step.type,
                       sourceType: step.sourceType,
@@ -88,7 +105,8 @@ export function StepsEditor({
                   <div className="flex-1">
                     <span className="font-medium capitalize">{step.type}</span>{" "}
                     <span className="text-muted-foreground">
-                      via {step.sourceType === "ai" ? "AI" : "template"} · after {step.delayHours}h
+                      via {step.sourceType === "ai" ? "AI" : "template"} ·{" "}
+                      {i === 0 ? "sends immediately" : `after ${formatDelay(step.delayHours)}`}
                       {step.stopOnReply ? " · stops on reply" : ""}
                     </span>
                   </div>
@@ -122,6 +140,7 @@ export function StepsEditor({
             <StepForm
               templates={templates}
               prompts={prompts}
+              isFirstStep={steps.length === 0}
               submitLabel="Add step"
               onCancel={() => setAdding(false)}
               onSubmit={async (v) => {
@@ -180,6 +199,7 @@ function StepForm({
   templates,
   prompts,
   initial,
+  isFirstStep,
   submitLabel,
   onSubmit,
   onCancel,
@@ -187,6 +207,7 @@ function StepForm({
   templates: Template[];
   prompts: AiPrompt[];
   initial?: StepValues;
+  isFirstStep: boolean;
   submitLabel: string;
   onSubmit: (v: StepValues) => Promise<void>;
   onCancel: () => void;
@@ -203,17 +224,21 @@ function StepForm({
       stopOnReply: true,
     },
   );
+  const initDelay = splitDelay(initial?.delayHours ?? 24);
+  const [delayValue, setDelayValue] = useState(initDelay.value);
+  const [delayUnit, setDelayUnit] = useState<"hours" | "days">(initDelay.unit);
 
   const eligibleTemplates = templates.filter((t) => t.type === v.type);
-  const selectClass = "h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm";
+  const selectClass = "h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm";
 
   function submit() {
     if (v.sourceType === "template" && !v.templateId) {
       toast.error("Choose a template");
       return;
     }
+    const delayHours = isFirstStep ? 0 : delayUnit === "days" ? delayValue * 24 : delayValue;
     start(async () => {
-      await onSubmit(v);
+      await onSubmit({ ...v, delayHours });
       toast.success("Saved");
       router.refresh();
     });
@@ -278,15 +303,36 @@ function StepForm({
         </div>
       )}
 
-      <div className="space-y-1.5">
-        <Label>Delay before this step (hours)</Label>
-        <Input
-          type="number"
-          min={0}
-          value={v.delayHours}
-          onChange={(e) => setV({ ...v, delayHours: parseInt(e.target.value || "0", 10) })}
-        />
-      </div>
+      {isFirstStep ? (
+        <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm sm:col-span-2">
+          The first step sends <span className="font-medium">as soon as someone is enrolled</span> —
+          there&apos;s no wait to set. Add a delay on follow-up steps below.
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Label>Wait before this step</Label>
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              min={0}
+              value={delayValue}
+              onChange={(e) => setDelayValue(Math.max(0, parseInt(e.target.value || "0", 10)))}
+              className="flex-1"
+            />
+            <select
+              className="h-9 w-28 rounded-md border border-input bg-transparent px-2 text-sm"
+              value={delayUnit}
+              onChange={(e) => setDelayUnit(e.target.value as "hours" | "days")}
+            >
+              <option value="hours">Hours</option>
+              <option value="days">Days</option>
+            </select>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Measured from when the previous step was sent.
+          </p>
+        </div>
+      )}
 
       <label className="flex items-center gap-2 text-sm sm:col-span-2">
         <input
