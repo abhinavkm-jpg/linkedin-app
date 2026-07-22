@@ -7,6 +7,7 @@ import { Play, Pause, Trash2, Check, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusPill } from "@/components/status-pill";
 import {
@@ -135,31 +136,16 @@ export function CampaignHeader({
           <Badge variant={statusTone[status] ?? "outline"}>{status}</Badge>
 
           <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={autoEnroll}
-                onChange={(e) => toggleAutoEnroll(e.target.checked)}
-                disabled={pending}
-              />
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <Switch checked={autoEnroll} onCheckedChange={toggleAutoEnroll} disabled={pending} />
               Auto-enroll matching connections
             </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={dedupeContacts}
-                onChange={(e) => toggleDedupe(e.target.checked)}
-                disabled={pending}
-              />
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <Switch checked={dedupeContacts} onCheckedChange={toggleDedupe} disabled={pending} />
               Message each person only once
             </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={reviewBeforeSend}
-                onChange={(e) => toggleReview(e.target.checked)}
-                disabled={pending}
-              />
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <Switch checked={reviewBeforeSend} onCheckedChange={toggleReview} disabled={pending} />
               Review AI before sending
             </label>
             {isActive ? (

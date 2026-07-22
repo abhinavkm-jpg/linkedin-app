@@ -7,6 +7,7 @@ import { Plus, Pencil, Trash2, Loader2, Mail, UserPlus, ChevronUp, ChevronDown }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { addStep, updateStep, moveStep, deleteStep } from "@/app/(dashboard)/campaigns/actions";
 import type { SequenceStep, Template, AiPrompt } from "@/db/schema";
 
@@ -334,11 +335,10 @@ function StepForm({
         </div>
       )}
 
-      <label className="flex items-center gap-2 text-sm sm:col-span-2">
-        <input
-          type="checkbox"
+      <label className="flex cursor-pointer items-center gap-2 text-sm sm:col-span-2">
+        <Switch
           checked={v.stopOnReply}
-          onChange={(e) => setV({ ...v, stopOnReply: e.target.checked })}
+          onCheckedChange={(c) => setV({ ...v, stopOnReply: c })}
         />
         Stop the sequence if they reply
       </label>

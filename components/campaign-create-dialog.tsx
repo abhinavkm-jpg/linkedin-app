@@ -6,6 +6,7 @@ import { Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -76,8 +77,8 @@ export function CampaignCreateDialog({
                 ))}
               </select>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={review} onChange={(e) => setReview(e.target.checked)} />
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <Switch checked={review} onCheckedChange={setReview} />
               Require review before sending AI-written messages
             </label>
             <div className="flex justify-end gap-2">
