@@ -184,13 +184,27 @@ export async function POST(req: Request) {
       const chatId = body.chat_id as string | undefined;
       const text = body.message as string | undefined;
 
+      // The chat's "attendee" is always the *prospect*, never our own account.
+      // On an outbound message the sender is us, so take the counterpart from the
+      // attendees list (the participant whose provider id isn't the owner's).
+      const attendeesList =
+        (body.attendees as
+          | Array<{ attendee_provider_id?: string; attendee_name?: string; attendee_public_identifier?: string }>
+          | undefined) ?? [];
+      const counterpart =
+        attendeesList.find((a) => a.attendee_provider_id && a.attendee_provider_id !== ownerId) ??
+        (isInbound ? sender : undefined);
+      const attendeeName = counterpart?.attendee_name ?? null;
+      const attendeeProviderId = counterpart?.attendee_provider_id ?? null;
+      const attendeePublicId = counterpart?.attendee_public_identifier ?? undefined;
+
       // Resolve the connection. Prefer the chat link we recorded on our own
-      // outbound send (most reliable), then fall back to sender identity.
+      // outbound send (most reliable), then fall back to the prospect's identity.
       const conn =
         (chatId ? await connectionForChat(chatId) : undefined) ??
         (await findConnection(account.id, {
-          providerId: senderProviderId,
-          publicId: sender?.attendee_public_identifier ?? undefined,
+          providerId: attendeeProviderId ?? undefined,
+          publicId: attendeePublicId,
         }));
 
       if (chatId) {
@@ -200,8 +214,8 @@ export async function POST(req: Request) {
             accountId: account.id,
             connectionId: conn?.id ?? null,
             unipileChatId: chatId,
-            attendeeProviderId: senderProviderId ?? null,
-            attendeeName: sender?.attendee_name ?? null,
+            attendeeProviderId,
+            attendeeName,
             lastMessageText: text ?? null,
             lastMessageAt: new Date(),
             unreadCount: isInbound ? 1 : 0,
@@ -213,8 +227,8 @@ export async function POST(req: Request) {
               lastMessageAt: new Date(),
               ...(isInbound ? { unreadCount: sql`${chats.unreadCount} + 1` } : {}),
               ...(conn?.id ? { connectionId: conn.id } : {}),
-              ...(sender?.attendee_name ? { attendeeName: sender.attendee_name } : {}),
-              ...(senderProviderId ? { attendeeProviderId: senderProviderId } : {}),
+              ...(attendeeName ? { attendeeName } : {}),
+              ...(attendeeProviderId ? { attendeeProviderId } : {}),
             },
           });
       }

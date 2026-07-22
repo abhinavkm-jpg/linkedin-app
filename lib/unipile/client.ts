@@ -268,6 +268,21 @@ export function listMessages(params: { chatId: string; cursor?: string; limit?: 
   });
 }
 
+export interface UnipileChatAttendee {
+  provider_id?: string;
+  name?: string;
+  is_self?: number | boolean;
+  picture_url?: string | null;
+  public_identifier?: string | null;
+  profile_url?: string | null;
+}
+
+export function listChatAttendees(chatId: string) {
+  return request<UnipileList<UnipileChatAttendee>>(`/chats/${chatId}/attendees`, {
+    query: { limit: 20 },
+  });
+}
+
 export const unipile = {
   listAccounts,
   getAccount,
@@ -279,4 +294,5 @@ export const unipile = {
   sendMessage,
   listChats,
   listMessages,
+  listChatAttendees,
 };
