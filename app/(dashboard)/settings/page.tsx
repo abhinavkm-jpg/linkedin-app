@@ -76,9 +76,9 @@ export default async function SettingsPage() {
             <CardHeader>
               <CardTitle className="text-base">Background schedules</CardTitle>
               <CardDescription>
-                Runs the send tick and acceptance poll via QStash (no Vercel Pro needed). Set this
-                up once after deploying, with your QStash token saved and APP_URL pointing at your
-                live domain.
+                Runs the send tick, auto-enroll, and acceptance poll via QStash (no Vercel Pro
+                needed). Set this up once after deploying, with your QStash token saved and APP_URL
+                pointing at your live domain. Re-run this after updates to pick up new schedules.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -98,7 +98,7 @@ export default async function SettingsPage() {
               label="Unipile webhook URL (use your webhook secret)"
               value={`${appUrl}/api/webhooks/unipile?secret=YOUR_WEBHOOK_SECRET`}
             />
-            <Field label="Background job endpoints" value={`${appUrl}/api/jobs/{sync,enrich,send,poll-acceptance}`} />
+            <Field label="Background job endpoints" value={`${appUrl}/api/jobs/{sync,enrich,send,auto-enroll,poll-acceptance}`} />
           </CardContent>
         </Card>
 

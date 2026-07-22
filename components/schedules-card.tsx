@@ -13,10 +13,16 @@ export function SchedulesCard({ schedules }: { schedules: ScheduleInfo[] }) {
   const [busy, setBusy] = useState(false);
   const router = useRouter();
 
-  const active = schedules.filter(
-    (s) => s.destination.includes("/api/jobs/send") || s.destination.includes("/api/jobs/poll-acceptance"),
-  );
-  const configured = active.length >= 2;
+  const KNOWN: { match: string; label: string }[] = [
+    { match: "/api/jobs/send", label: "send tick" },
+    { match: "/api/jobs/auto-enroll", label: "auto-enroll" },
+    { match: "/api/jobs/poll-acceptance", label: "acceptance poll" },
+  ];
+  const labelFor = (destination: string) =>
+    KNOWN.find((k) => destination.includes(k.match))?.label ?? "job";
+
+  const active = schedules.filter((s) => KNOWN.some((k) => s.destination.includes(k.match)));
+  const configured = KNOWN.every((k) => schedules.some((s) => s.destination.includes(k.match)));
 
   function run() {
     setBusy(true);
@@ -51,9 +57,7 @@ export function SchedulesCard({ schedules }: { schedules: ScheduleInfo[] }) {
             <li key={s.id} className="flex items-center gap-2">
               <CalendarClock className="h-4 w-4 text-muted-foreground" />
               <code className="text-xs">{s.cron}</code>
-              <span className="text-muted-foreground">
-                {s.destination.includes("poll-acceptance") ? "acceptance poll" : "send tick"}
-              </span>
+              <span className="text-muted-foreground">{labelFor(s.destination)}</span>
             </li>
           ))}
         </ul>
