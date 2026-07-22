@@ -45,7 +45,7 @@ export function UserMenu({
           <p className="truncate text-xs text-muted-foreground capitalize">{role ?? "member"}</p>
         </div>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-56">
         <DropdownMenuLabel className="truncate">{email}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem
