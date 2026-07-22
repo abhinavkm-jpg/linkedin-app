@@ -38,7 +38,7 @@ export function ConnectionPicker({
 
   if (value) {
     return (
-      <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
+      <div className="flex min-w-0 items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
         <div className="min-w-0">
           <p className="truncate font-medium">{value.name}</p>
           {value.headline && (

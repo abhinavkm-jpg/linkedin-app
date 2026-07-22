@@ -202,7 +202,7 @@ function TemplateDialog({
           <DialogTitle>{template ? "Edit template" : "New template"}</DialogTitle>
           <DialogDescription>Use placeholders like {"{{first_name}}"}.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           <div className="space-y-1.5">
             <Label>Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
@@ -418,7 +418,7 @@ function PromptDialog({
           <DialogTitle>{prompt ? "Edit prompt" : "New AI prompt"}</DialogTitle>
           <DialogDescription>Define the voice and rules for AI-written messages.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Name</Label>
@@ -457,7 +457,7 @@ function PromptDialog({
               Test this prompt — generate a real message for a connection. Leave empty to use a
               sample prospect.
             </p>
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
               <ConnectionPicker value={picked} onChange={setPicked} />
               <select
                 className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
