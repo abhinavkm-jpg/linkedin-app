@@ -12,21 +12,18 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// LinkedIn throttles rapid profile views, so enrich GENTLY: a few per run,
-// spaced a few seconds apart, and stop before the 60s function limit. The
-// per-account daily cap (default 150) bounds the total; the every-30-min
-// schedule keeps the trickle going across the day.
-const MAX_PER_RUN = 10; // total across all accounts, per run
-const SPACING_MS = 3000; // gap between profile fetches
-const DEADLINE_MS = 50_000; // leave headroom under maxDuration (60s)
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// One profile per run, then re-queue after a short gap — a gentle trickle that
+// LinkedIn won't flag as a burst. The daily cap (default 150/account) stops it.
+const GAP_SECONDS = 60; // wait ~1 min, then try the next
+const THROTTLED_BACKOFF_SECONDS = 1800; // rate limited → back off 30 min
+const SKIP_SECONDS = 5; // couldn't enrich this one → move on quickly
 
 /**
- * Proactive daily profile enrichment. For each account with `autoEnrich` on,
- * enrich un-enriched connections (oldest first) on the account's own daily
- * budget. Then kick `auto-enroll` so freshly-enriched connections that now pass
- * a campaign's ICP are added to the live campaign automatically.
+ * Proactive daily enrichment, paced one-at-a-time. Enriches a single un-enriched
+ * connection on an account that's still under its daily budget, then re-queues
+ * itself 60s later to do the next. Kicked off when the toggle is turned on and
+ * by a daily schedule; stops on its own when everything is enriched or capped.
+ * (The separate auto-enroll schedule adds freshly-enriched matches to campaigns.)
  */
 export async function POST(req: Request) {
   const job = await readJob(req);
@@ -37,54 +34,36 @@ export async function POST(req: Request) {
     .from(linkedinAccounts)
     .where(eq(linkedinAccounts.autoEnrich, true));
 
-  const startedAt = Date.now();
-  let totalEnriched = 0;
-  const perAccount: { accountId: string; enriched: number }[] = [];
-
   for (const account of accounts) {
-    if (totalEnriched >= MAX_PER_RUN || Date.now() - startedAt > DEADLINE_MS) break;
-    let enriched = 0;
+    if (!(await canSend(account.id, "autoEnrich"))) continue; // daily cap reached
 
-    while (totalEnriched < MAX_PER_RUN && Date.now() - startedAt <= DEADLINE_MS) {
-      if (!(await canSend(account.id, "autoEnrich"))) break; // daily cap reached
+    const [conn] = await db
+      .select()
+      .from(connections)
+      .where(and(eq(connections.accountId, account.id), isNull(connections.enrichedAt)))
+      .orderBy(asc(connections.createdAt))
+      .limit(1);
+    if (!conn) continue; // nothing left on this account
 
-      const [conn] = await db
-        .select()
-        .from(connections)
-        .where(and(eq(connections.accountId, account.id), isNull(connections.enrichedAt)))
-        .orderBy(asc(connections.createdAt))
-        .limit(1);
-      if (!conn) break; // nothing left to enrich on this account
-
-      try {
-        await enrichConnectionRow(conn, account, { counter: "autoEnrich" });
-        enriched++;
-        totalEnriched++;
-      } catch (e) {
-        // Rate limited → stop entirely; retrying now would only deepen the throttle.
-        if (e instanceof UnipileError && (e.isRateLimited || e.status === 429)) {
-          if (enriched > 0) perAccount.push({ accountId: account.id, enriched });
-          return NextResponse.json({ ok: true, enriched: totalEnriched, rateLimited: true, perAccount });
-        }
-        // Mark as attempted so a permanently-failing profile doesn't block the queue.
-        await db
-          .update(connections)
-          .set({ enrichedAt: new Date() })
-          .where(eq(connections.id, conn.id));
-        console.error("[auto-enrich] failed for", conn.id, e instanceof Error ? e.message : e);
+    try {
+      await enrichConnectionRow(conn, account, { counter: "autoEnrich" });
+      // Success → line up the next one in ~1 minute.
+      await enqueueJob("auto-enrich", {}, { delaySeconds: GAP_SECONDS });
+      return NextResponse.json({ ok: true, enriched: 1, account: account.id });
+    } catch (e) {
+      if (e instanceof UnipileError && (e.isRateLimited || e.status === 429)) {
+        // Throttled → wait for the window to clear before trying again.
+        await enqueueJob("auto-enrich", {}, { delaySeconds: THROTTLED_BACKOFF_SECONDS });
+        return NextResponse.json({ ok: true, rateLimited: true, account: account.id });
       }
-
-      // Space out calls so LinkedIn doesn't see a burst.
-      if (totalEnriched < MAX_PER_RUN) await sleep(SPACING_MS);
+      // Permanent failure (e.g. 404) → mark attempted and move on promptly.
+      await db.update(connections).set({ enrichedAt: new Date() }).where(eq(connections.id, conn.id));
+      console.error("[auto-enrich] failed for", conn.id, e instanceof Error ? e.message : e);
+      await enqueueJob("auto-enrich", {}, { delaySeconds: SKIP_SECONDS });
+      return NextResponse.json({ ok: true, skipped: conn.id });
     }
-
-    if (enriched > 0) perAccount.push({ accountId: account.id, enriched });
   }
 
-  // Feed newly-enriched contacts into live campaigns (ICP-tested inside).
-  if (totalEnriched > 0) {
-    await enqueueJob("auto-enroll", {});
-  }
-
-  return NextResponse.json({ ok: true, enriched: totalEnriched, perAccount });
+  // No eligible work (all accounts capped or fully enriched) → stop the chain.
+  return NextResponse.json({ ok: true, idle: true });
 }
