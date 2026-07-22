@@ -80,18 +80,29 @@ export default async function CampaignDetailPage({
   const t = campaign.targeting ?? {};
   const hasIcp =
     (t.titleKeywords?.length ?? 0) + (t.countries?.length ?? 0) + (t.tags?.length ?? 0) > 0;
-  // Always compute the pool size — with no ICP this is the whole account.
+  // Candidate pool (permissive — everyone matching by title, country verified
+  // later) and the verified count (already enriched AND fully matching).
   let icpMatchCount: number | null = null;
+  let icpVerifiedCount: number | null = null;
   try {
-    icpMatchCount = (
-      await getIcpMatches(campaign.accountId, t, {
+    const [cand, verified] = await Promise.all([
+      getIcpMatches(campaign.accountId, t, {
         excludeCampaignId: id,
         idLimit: 1,
         dedupe: campaign.dedupeContacts,
-      })
-    ).count;
+      }),
+      getIcpMatches(campaign.accountId, t, {
+        excludeCampaignId: id,
+        idLimit: 1,
+        dedupe: campaign.dedupeContacts,
+        strict: true,
+      }),
+    ]);
+    icpMatchCount = cand.count;
+    icpVerifiedCount = verified.count;
   } catch {
     icpMatchCount = null;
+    icpVerifiedCount = null;
   }
 
   const editable = campaign.status === "draft" || campaign.status === "paused";
@@ -157,7 +168,7 @@ export default async function CampaignDetailPage({
               <span>Ideal Customer Profile</span>
               {icpMatchCount !== null && (
                 <Badge variant="secondary" className="ml-1">
-                  {hasIcp ? `${icpMatchCount.toLocaleString()} match` : "Whole network"}
+                  {hasIcp ? `${icpMatchCount.toLocaleString()} candidates` : "Whole network"}
                 </Badge>
               )}
             </AccordionTrigger>
@@ -166,6 +177,7 @@ export default async function CampaignDetailPage({
                 campaignId={campaign.id}
                 targeting={t}
                 matchCount={icpMatchCount}
+                verifiedCount={icpVerifiedCount}
                 accountId={campaign.accountId}
               />
             </AccordionContent>

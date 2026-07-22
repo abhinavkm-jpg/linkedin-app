@@ -113,7 +113,19 @@ export interface IcpMatchResult {
 export async function getIcpMatches(
   accountId: string,
   targeting: CampaignTargeting,
-  opts: { excludeCampaignId?: string; idLimit?: number; dedupe?: boolean } = {},
+  opts: {
+    excludeCampaignId?: string;
+    idLimit?: number;
+    dedupe?: boolean;
+    /**
+     * "candidate" (default): country is permissive — un-enriched connections are
+     * included (their country isn't known yet), so everyone matching by title
+     * flows forward and country is verified later, after enrichment.
+     * "strict": country must match AND the connection must already be enriched —
+     * used for the "verified" count of people ready to message.
+     */
+    strict?: boolean;
+  } = {},
 ): Promise<IcpMatchResult> {
   // Pool = all of the account's connections (they are all 1st-degree), minus
   // anyone flagged do-not-contact. Empty targeting matches the whole pool.
@@ -136,7 +148,21 @@ export async function getIcpMatches(
   }
 
   const countries = (targeting.countries ?? []).filter(Boolean);
-  if (countries.length > 0) clauses.push(inArray(connections.locationCountry, countries));
+  if (countries.length > 0) {
+    if (opts.strict) {
+      // Verified: country must match and the row must be enriched.
+      clauses.push(inArray(connections.locationCountry, countries));
+      clauses.push(isNotNull(connections.enrichedAt));
+    } else {
+      // Candidate: match if country matches OR the row isn't enriched yet
+      // (country unknown → give it the benefit of the doubt, verify later).
+      const countryClause = or(
+        inArray(connections.locationCountry, countries),
+        isNull(connections.enrichedAt),
+      );
+      if (countryClause) clauses.push(countryClause);
+    }
+  }
 
   const tags = (targeting.tags ?? []).filter(Boolean);
   if (tags.length > 0) clauses.push(arrayOverlaps(connections.tags, tags));

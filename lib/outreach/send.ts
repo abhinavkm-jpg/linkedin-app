@@ -79,6 +79,15 @@ export async function processEnrollment(enr: Enrollment): Promise<boolean> {
   // and re-check the ICP against the enriched job/company/country before sending.
   if (hasIcp(camp.targeting)) {
     if (!conn.enrichedAt) {
+      // When the account auto-enriches, let that gentle ~1/min path do the
+      // enrichment and just hold here — avoids bursty send-time profile lookups.
+      if (account.autoEnrich) {
+        await db
+          .update(enrollments)
+          .set({ state: "queued", nextRunAt: hold(), updatedAt: new Date() })
+          .where(eq(enrollments.id, enr.id));
+        return false;
+      }
       if (!(await canEnrichNow(account.id))) {
         // Daily enrichment budget exhausted — try again tomorrow.
         await db

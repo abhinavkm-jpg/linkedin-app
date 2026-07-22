@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, exists, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { connections, linkedinAccounts } from "@/db/schema";
+import { connections, linkedinAccounts, enrollments, campaigns } from "@/db/schema";
 import { readJob } from "@/lib/jobs";
 import { canSend } from "@/lib/rate-limit";
 import { UnipileError } from "@/lib/unipile/client";
@@ -37,12 +37,35 @@ export async function POST(req: Request) {
   for (const account of accounts) {
     if (!(await canSend(account.id, "autoEnrich"))) continue; // daily cap reached
 
-    const [conn] = await db
+    // Prefer connections already enrolled in an active campaign (they're in
+    // play — enriching them lets the messaging pipeline flow); else oldest.
+    const enrolledInActive = exists(
+      db
+        .select({ x: sql`1` })
+        .from(enrollments)
+        .innerJoin(campaigns, eq(campaigns.id, enrollments.campaignId))
+        .where(
+          and(eq(enrollments.connectionId, connections.id), eq(campaigns.status, "active")),
+        ),
+    );
+    const [priority] = await db
       .select()
       .from(connections)
-      .where(and(eq(connections.accountId, account.id), isNull(connections.enrichedAt)))
+      .where(
+        and(eq(connections.accountId, account.id), isNull(connections.enrichedAt), enrolledInActive),
+      )
       .orderBy(asc(connections.createdAt))
       .limit(1);
+    let conn = priority;
+    if (!conn) {
+      const [oldest] = await db
+        .select()
+        .from(connections)
+        .where(and(eq(connections.accountId, account.id), isNull(connections.enrichedAt)))
+        .orderBy(asc(connections.createdAt))
+        .limit(1);
+      conn = oldest;
+    }
     if (!conn) continue; // nothing left on this account
 
     try {

@@ -41,10 +41,12 @@ export function IcpEditor({
   campaignId,
   targeting,
   matchCount,
+  verifiedCount,
 }: {
   campaignId: string;
   targeting: CampaignTargeting;
   matchCount: number | null;
+  verifiedCount?: number | null;
   accountId: string;
 }) {
   const router = useRouter();
@@ -67,8 +69,10 @@ export function IcpEditor({
     <div className="space-y-5">
       <p className="text-sm text-muted-foreground">
         Who this campaign targets. Leave everything empty to target your whole network on this
-        account. Title keywords match a connection&apos;s LinkedIn headline (and role once
-        enriched).
+        account. Title keywords match a connection&apos;s headline, role, job description, company
+        &amp; About. <span className="font-medium">Country is verified as each connection gets
+        enriched</span> — everyone matching by title enters the pipeline, then only true matches are
+        messaged.
       </p>
       <div className="space-y-5">
         <div className="space-y-1.5">
@@ -106,8 +110,11 @@ export function IcpEditor({
           </Button>
           {matchCount !== null && (
             <Badge variant="secondary">
-              {matchCount.toLocaleString()} {empty ? "connections (whole network)" : "match"}
+              {matchCount.toLocaleString()} {empty ? "connections (whole network)" : "candidates"}
             </Badge>
+          )}
+          {!empty && verifiedCount != null && (
+            <Badge variant="outline">{verifiedCount.toLocaleString()} verified</Badge>
           )}
         </div>
       </div>
