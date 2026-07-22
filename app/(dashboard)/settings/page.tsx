@@ -76,9 +76,10 @@ export default async function SettingsPage() {
             <CardHeader>
               <CardTitle className="text-base">Background schedules</CardTitle>
               <CardDescription>
-                Runs the send tick, auto-enroll, and acceptance poll via QStash (no Vercel Pro
-                needed). Set this up once after deploying, with your QStash token saved and APP_URL
-                pointing at your live domain. Re-run this after updates to pick up new schedules.
+                Runs the send tick, auto-enroll, auto-enrich, and acceptance poll via QStash (no
+                Vercel Pro needed). Set this up once after deploying, with your QStash token saved
+                and APP_URL pointing at your live domain. Re-run this after updates to pick up new
+                schedules.
               </CardDescription>
             </CardHeader>
             <CardContent>
