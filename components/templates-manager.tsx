@@ -24,8 +24,18 @@ import {
   saveAiPrompt,
   deleteAiPrompt,
   previewAiMessage,
+  previewTemplateForConnection,
 } from "@/app/(dashboard)/templates/actions";
+import { ConnectionPicker, type PickedConnection } from "@/components/connection-picker";
 import type { Template, AiPrompt } from "@/db/schema";
+
+const PREVIEW_STEPS: { value: string; label: string }[] = [
+  { value: "connection_request", label: "Connection request" },
+  { value: "welcome", label: "Welcome (after accept)" },
+  { value: "follow_up_1", label: "Follow-up 1" },
+  { value: "follow_up_2", label: "Follow-up 2" },
+  { value: "follow_up_3", label: "Follow-up 3" },
+];
 
 const MODELS = [
   { value: "claude-sonnet-5", label: "Claude Sonnet 5 (balanced)" },
@@ -145,6 +155,9 @@ function TemplateDialog({
   const [name, setName] = useState("");
   const [type, setType] = useState<"invite" | "message">("message");
   const [body, setBody] = useState("");
+  const [picked, setPicked] = useState<PickedConnection | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
 
   // Sync fields when dialog opens.
   const key = template?.id ?? "new";
@@ -152,6 +165,8 @@ function TemplateDialog({
     setName(template?.name ?? "");
     setType(template?.type ?? "message");
     setBody(template?.body ?? "");
+    setPicked(null);
+    setPreview(null);
   });
 
   function submit() {
@@ -164,6 +179,20 @@ function TemplateDialog({
       toast.success("Template saved");
       onOpenChange(false);
     });
+  }
+
+  function runPreview() {
+    if (!body.trim()) {
+      toast.error("Write the template body first");
+      return;
+    }
+    setPreviewing(true);
+    previewTemplateForConnection({ body, connectionId: picked?.id })
+      .then((res) => {
+        if (res.error) toast.error(res.error);
+        else setPreview(res.text ?? "");
+      })
+      .finally(() => setPreviewing(false));
   }
 
   return (
@@ -201,6 +230,26 @@ function TemplateDialog({
               <p className="text-xs text-muted-foreground">{body.length}/300 characters</p>
             )}
           </div>
+
+          <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              Test with a connection — see exactly how it renders. Leave empty to use a sample.
+            </p>
+            <ConnectionPicker value={picked} onChange={setPicked} />
+            <Button size="sm" variant="outline" onClick={runPreview} disabled={previewing}>
+              {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              Preview
+            </Button>
+            {preview !== null && (
+              <div className="rounded-md border bg-background p-3 text-sm">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">
+                  {picked ? `Preview for ${picked.name}:` : "Preview (sample connection):"}
+                </p>
+                <p className="whitespace-pre-wrap">{preview || "(empty)"}</p>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -317,6 +366,8 @@ function PromptDialog({
   const [model, setModel] = useState("claude-sonnet-5");
   const [isDefault, setIsDefault] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState("");
+  const [picked, setPicked] = useState<PickedConnection | null>(null);
+  const [step, setStep] = useState("welcome");
 
   const key = prompt?.id ?? "new";
   useSyncOnOpen(open, key, () => {
@@ -325,6 +376,8 @@ function PromptDialog({
     setIsDefault(prompt?.isDefault ?? false);
     setSystemPrompt(prompt?.systemPrompt ?? "");
     setPreview("");
+    setPicked(null);
+    setStep("welcome");
   });
 
   function submit() {
@@ -341,7 +394,12 @@ function PromptDialog({
 
   function runPreview() {
     setPreviewing(true);
-    previewAiMessage({ systemPrompt, model, step: "welcome" })
+    previewAiMessage({
+      systemPrompt,
+      model,
+      step: step as "connection_request" | "welcome" | "follow_up_1" | "follow_up_2" | "follow_up_3",
+      connectionId: picked?.id,
+    })
       .then((res) => {
         if (res.error) toast.error(res.error);
         else {
@@ -394,28 +452,46 @@ function PromptDialog({
               className="font-mono text-xs"
             />
           </div>
-          {preview && (
-            <div className="rounded-md border bg-muted/40 p-3 text-sm">
-              <p className="mb-1 text-xs font-medium text-muted-foreground">
-                Sample (welcome message for a fictional VP):
-              </p>
-              <p className="whitespace-pre-wrap">{preview}</p>
+          <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              Test this prompt — generate a real message for a connection. Leave empty to use a
+              sample prospect.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <ConnectionPicker value={picked} onChange={setPicked} />
+              <select
+                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                value={step}
+                onChange={(e) => setStep(e.target.value)}
+              >
+                {PREVIEW_STEPS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
-          <div className="flex justify-between gap-2">
-            <Button variant="outline" onClick={runPreview} disabled={previewing || !systemPrompt}>
+            <Button variant="outline" size="sm" onClick={runPreview} disabled={previewing || !systemPrompt}>
               {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Preview
+              Generate preview
             </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button onClick={submit} disabled={pending}>
-                {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-                Save
-              </Button>
-            </div>
+            {preview && (
+              <div className="rounded-md border bg-background p-3 text-sm">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">
+                  {picked ? `Preview for ${picked.name}:` : "Preview (sample prospect):"}
+                </p>
+                <p className="whitespace-pre-wrap">{preview}</p>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submit} disabled={pending}>
+              {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save
+            </Button>
           </div>
         </div>
       </DialogContent>
