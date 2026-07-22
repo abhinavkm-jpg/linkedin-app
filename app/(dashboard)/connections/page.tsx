@@ -21,6 +21,8 @@ export default async function ConnectionsPage({
     search: sp.q,
     country: sp.country,
     status: sp.status,
+    enriched: sp.enriched,
+    sort: sp.sort,
     page: sp.page ? parseInt(sp.page, 10) : 1,
   };
 

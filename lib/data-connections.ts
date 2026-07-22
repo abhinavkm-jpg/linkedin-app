@@ -2,12 +2,15 @@ import "server-only";
 import {
   and,
   or,
+  asc,
   count,
   desc,
   eq,
   ne,
   ilike,
   inArray,
+  isNull,
+  isNotNull,
   notExists,
   arrayOverlaps,
   sql,
@@ -23,6 +26,8 @@ export interface ConnectionFilters {
   country?: string;
   status?: string;
   tag?: string;
+  enriched?: string; // "yes" | "no"
+  sort?: string; // "connected" | "oldest" | "recent" | "name"
   page?: number;
   pageSize?: number;
 }
@@ -40,6 +45,8 @@ function buildWhere(f: ConnectionFilters): SQL | undefined {
   if (f.country) clauses.push(eq(connections.locationCountry, f.country));
   if (f.status) clauses.push(eq(connections.relationshipStatus, f.status as Connection["relationshipStatus"]));
   if (f.tag) clauses.push(sql`${f.tag} = ANY(${connections.tags})`);
+  if (f.enriched === "yes") clauses.push(isNotNull(connections.enrichedAt));
+  else if (f.enriched === "no") clauses.push(isNull(connections.enrichedAt));
   if (f.search) {
     const q = `%${f.search}%`;
     const term = or(
@@ -65,12 +72,26 @@ export async function getConnections(
   const parts = [base, scope].filter(Boolean) as SQL[];
   const where = parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : and(...parts);
 
+  const orderBy = (() => {
+    switch (f.sort) {
+      case "recent":
+        return [desc(connections.createdAt)];
+      case "oldest":
+        return [asc(connections.connectedAt), asc(connections.createdAt)];
+      case "name":
+        return [asc(connections.firstName), asc(connections.lastName)];
+      case "connected":
+      default:
+        return [desc(connections.connectedAt), desc(connections.createdAt)];
+    }
+  })();
+
   const [rows, [{ total }]] = await Promise.all([
     db
       .select()
       .from(connections)
       .where(where)
-      .orderBy(desc(connections.connectedAt), desc(connections.createdAt))
+      .orderBy(...orderBy)
       .limit(pageSize)
       .offset((page - 1) * pageSize),
     db.select({ total: count() }).from(connections).where(where),

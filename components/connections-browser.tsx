@@ -3,12 +3,20 @@
 import { useState, useTransition, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Sparkles, UserPlus, Loader2 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { Search, Sparkles, UserPlus, Loader2, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { StatusPill } from "@/components/status-pill";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuCheckboxItem,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -32,6 +40,26 @@ const STATUSES = [
   "do_not_contact",
 ];
 
+const SORTS = [
+  { value: "connected", label: "Newest connected" },
+  { value: "oldest", label: "Oldest connected" },
+  { value: "recent", label: "Recently added" },
+  { value: "name", label: "Name (A–Z)" },
+];
+
+// Optional columns the user can show/hide. "Name" and "Status" are always shown.
+const COLUMNS = [
+  { key: "headline", label: "Headline" },
+  { key: "position", label: "Position" },
+  { key: "company", label: "Company" },
+  { key: "country", label: "Country" },
+  { key: "tags", label: "Tags" },
+  { key: "connected", label: "Connected" },
+  { key: "account", label: "Account" },
+] as const;
+type ColKey = (typeof COLUMNS)[number]["key"];
+const DEFAULT_COLS: ColKey[] = ["headline", "company", "country"];
+
 export function ConnectionsBrowser({
   rows,
   total,
@@ -49,7 +77,14 @@ export function ConnectionsBrowser({
   accounts: Pick<LinkedinAccount, "id" | "name">[];
   countries: string[];
   campaigns: { id: string; name: string; accountId: string }[];
-  filters: { accountId?: string; search?: string; country?: string; status?: string };
+  filters: {
+    accountId?: string;
+    search?: string;
+    country?: string;
+    status?: string;
+    enriched?: string;
+    sort?: string;
+  };
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -57,6 +92,9 @@ export function ConnectionsBrowser({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [campaignId, setCampaignId] = useState("");
   const [pending, start] = useTransition();
+  const [cols, setCols] = useState<Set<ColKey>>(new Set(DEFAULT_COLS));
+
+  const accountName = new Map(accounts.map((a) => [a.id, a.name]));
 
   const setParam = useCallback(
     (key: string, value: string) => {
@@ -73,10 +111,7 @@ export function ConnectionsBrowser({
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
 
   function toggleAll() {
-    setSelected(() => {
-      if (allSelected) return new Set();
-      return new Set(rows.map((r) => r.id));
-    });
+    setSelected(() => (allSelected ? new Set() : new Set(rows.map((r) => r.id))));
   }
 
   function toggleOne(id: string) {
@@ -84,6 +119,15 @@ export function ConnectionsBrowser({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleCol(key: ColKey) {
+    setCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
@@ -123,6 +167,9 @@ export function ConnectionsBrowser({
 
   const selectClass =
     "h-8 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+
+  // Checkbox + Name + visible optional cols + Status.
+  const colSpan = 2 + cols.size + 1;
 
   return (
     <div className="space-y-4">
@@ -175,6 +222,49 @@ export function ConnectionsBrowser({
             </option>
           ))}
         </select>
+        <select
+          className={selectClass}
+          defaultValue={filters.enriched ?? ""}
+          onChange={(e) => setParam("enriched", e.target.value)}
+        >
+          <option value="">Any enrichment</option>
+          <option value="yes">Enriched</option>
+          <option value="no">Not enriched</option>
+        </select>
+        <select
+          className={selectClass}
+          defaultValue={filters.sort ?? "connected"}
+          onChange={(e) => setParam("sort", e.target.value)}
+        >
+          {SORTS.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="outline" size="sm">
+                <SlidersHorizontal className="h-4 w-4" /> Columns
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuLabel>Show columns</DropdownMenuLabel>
+            {COLUMNS.map((c) => (
+              <DropdownMenuCheckboxItem
+                key={c.key}
+                checked={cols.has(c.key)}
+                onCheckedChange={() => toggleCol(c.key)}
+                closeOnClick={false}
+              >
+                {c.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Bulk action bar */}
@@ -207,7 +297,7 @@ export function ConnectionsBrowser({
       )}
 
       {/* Table */}
-      <div className="rounded-lg border">
+      <div className="overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -215,16 +305,20 @@ export function ConnectionsBrowser({
                 <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all" />
               </TableHead>
               <TableHead>Name</TableHead>
-              <TableHead className="hidden md:table-cell">Headline</TableHead>
-              <TableHead className="hidden lg:table-cell">Company</TableHead>
-              <TableHead className="hidden lg:table-cell">Country</TableHead>
+              {cols.has("headline") && <TableHead>Headline</TableHead>}
+              {cols.has("position") && <TableHead>Position</TableHead>}
+              {cols.has("company") && <TableHead>Company</TableHead>}
+              {cols.has("country") && <TableHead>Country</TableHead>}
+              {cols.has("tags") && <TableHead>Tags</TableHead>}
+              {cols.has("connected") && <TableHead>Connected</TableHead>}
+              {cols.has("account") && <TableHead>Account</TableHead>}
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={colSpan} className="py-10 text-center text-sm text-muted-foreground">
                   No connections match these filters.
                 </TableCell>
               </TableRow>
@@ -246,16 +340,38 @@ export function ConnectionsBrowser({
                           {((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")).toUpperCase() || "?"}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="font-medium">
+                      <span className="font-medium whitespace-nowrap">
                         {[c.firstName, c.lastName].filter(Boolean).join(" ") || c.publicIdentifier}
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className="hidden max-w-xs truncate md:table-cell text-muted-foreground">
-                    {c.headline}
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">{c.company ?? "—"}</TableCell>
-                  <TableCell className="hidden lg:table-cell">{c.locationCountry ?? "—"}</TableCell>
+                  {cols.has("headline") && (
+                    <TableCell className="max-w-xs truncate text-muted-foreground">{c.headline}</TableCell>
+                  )}
+                  {cols.has("position") && (
+                    <TableCell className="max-w-xs truncate text-muted-foreground">
+                      {c.position ?? "—"}
+                    </TableCell>
+                  )}
+                  {cols.has("company") && <TableCell className="whitespace-nowrap">{c.company ?? "—"}</TableCell>}
+                  {cols.has("country") && <TableCell>{c.locationCountry ?? "—"}</TableCell>}
+                  {cols.has("tags") && (
+                    <TableCell className="max-w-40 truncate text-muted-foreground">
+                      {c.tags && c.tags.length > 0 ? c.tags.join(", ") : "—"}
+                    </TableCell>
+                  )}
+                  {cols.has("connected") && (
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {c.connectedAt
+                        ? formatDistanceToNow(new Date(c.connectedAt), { addSuffix: true })
+                        : "—"}
+                    </TableCell>
+                  )}
+                  {cols.has("account") && (
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {accountName.get(c.accountId) ?? "—"}
+                    </TableCell>
+                  )}
                   <TableCell>
                     <StatusPill status={c.relationshipStatus} />
                   </TableCell>
