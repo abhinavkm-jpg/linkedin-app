@@ -1,0 +1,1 @@
+ALTER TABLE "campaigns" ADD COLUMN "ai_reply_decision" boolean DEFAULT false NOT NULL;

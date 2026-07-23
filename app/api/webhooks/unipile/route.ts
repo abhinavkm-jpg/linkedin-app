@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   linkedinAccounts,
   connections,
   enrollments,
+  campaigns,
   chats,
   webhookEvents,
 } from "@/db/schema";
+import { classifyReply } from "@/lib/ai/generate";
 import { getSettings } from "@/lib/settings";
 import { getAccount, UnipileError } from "@/lib/unipile/client";
 import type { UnipileSourceStatus } from "@/lib/unipile/types";
@@ -234,21 +236,46 @@ export async function POST(req: Request) {
       }
 
       if (isInbound && conn) {
-        await db
-          .update(connections)
-          .set({ relationshipStatus: "replied" })
-          .where(eq(connections.id, conn.id));
-        // A reply stops the sequence AND is worth surfacing even if the
-        // sequence already finished — so `replied` overrides `completed` too.
-        await db
-          .update(enrollments)
-          .set({ state: "replied", nextRunAt: null })
+        // Active enrollments for this connection, with each campaign's AI setting.
+        const active = await db
+          .select({ id: enrollments.id, ai: campaigns.aiReplyDecision })
+          .from(enrollments)
+          .innerJoin(campaigns, eq(campaigns.id, enrollments.campaignId))
           .where(
             and(
               eq(enrollments.connectionId, conn.id),
               sql`${enrollments.state} not in ('replied','failed','skipped')`,
             ),
           );
+
+        // If any active campaign delegates the decision to AI, classify the
+        // reply once: a genuine reply → stop & hand off; auto-reply/OOO → keep going.
+        let decision: "handoff" | "continue" = "handoff";
+        if (active.some((e) => e.ai) && text) {
+          const res = await classifyReply(text, attendeeName ?? conn.firstName ?? null);
+          decision = res.action;
+          console.log(`[webhook] AI reply triage for ${conn.id}: ${res.action} — ${res.reason}`);
+        }
+
+        // Stop an enrollment when its campaign isn't AI-gated, or the AI said handoff.
+        const stopIds = active.filter((e) => !e.ai || decision === "handoff").map((e) => e.id);
+
+        if (stopIds.length > 0) {
+          await db
+            .update(enrollments)
+            .set({ state: "replied", nextRunAt: null })
+            .where(inArray(enrollments.id, stopIds));
+        }
+
+        // Mark the connection replied only when we actually stopped/handed off a
+        // sequence (a real reply). Pure "continue" (auto-reply) leaves it as-is.
+        // With no active enrollments at all, treat it as a normal reply.
+        if (stopIds.length > 0 || active.length === 0) {
+          await db
+            .update(connections)
+            .set({ relationshipStatus: "replied" })
+            .where(eq(connections.id, conn.id));
+        }
       }
       return NextResponse.json({ ok: true });
     }

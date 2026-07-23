@@ -138,6 +138,7 @@ export default async function CampaignDetailPage({
           reviewBeforeSend={campaign.reviewBeforeSend}
           dedupeContacts={campaign.dedupeContacts}
           autoEnroll={campaign.autoEnroll}
+          aiReplyDecision={campaign.aiReplyDecision}
           hasSteps={steps.length > 0}
           stateCounts={stateCountsNum}
         />

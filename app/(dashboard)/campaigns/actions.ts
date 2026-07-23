@@ -115,6 +115,7 @@ export async function updateCampaign(
     targeting?: CampaignTargeting;
     dedupeContacts?: boolean;
     autoEnroll?: boolean;
+    aiReplyDecision?: boolean;
   },
 ): Promise<void> {
   await requireUser();
@@ -124,6 +125,7 @@ export async function updateCampaign(
   if (input.targeting !== undefined) set.targeting = input.targeting;
   if (input.dedupeContacts !== undefined) set.dedupeContacts = input.dedupeContacts;
   if (input.autoEnroll !== undefined) set.autoEnroll = input.autoEnroll;
+  if (input.aiReplyDecision !== undefined) set.aiReplyDecision = input.aiReplyDecision;
   if (Object.keys(set).length === 0) return;
   await db.update(campaigns).set(set).where(eq(campaigns.id, id));
 

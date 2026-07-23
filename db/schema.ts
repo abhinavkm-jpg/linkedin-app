@@ -274,6 +274,10 @@ export const campaigns = pgTable("campaigns", {
   // When true (and the campaign is active), a background job keeps enrolling
   // all matching connections automatically — no manual "Enroll" clicks.
   autoEnroll: boolean("auto_enroll").notNull().default(true),
+  // When true, an AI triages each inbound reply: a genuine human reply stops
+  // the sequence and hands off to the inbox; auto-replies / out-of-office keep
+  // the follow-up running. When false, any reply stops the sequence.
+  aiReplyDecision: boolean("ai_reply_decision").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

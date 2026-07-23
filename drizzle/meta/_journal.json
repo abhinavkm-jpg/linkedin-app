@@ -43,6 +43,13 @@
       "when": 1784719854287,
       "tag": "0005_closed_gideon",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784797897635,
+      "tag": "0006_robust_colossus",
+      "breakpoints": true
     }
   ]
 }

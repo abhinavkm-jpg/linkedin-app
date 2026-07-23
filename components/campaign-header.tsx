@@ -31,6 +31,7 @@ export function CampaignHeader({
   reviewBeforeSend,
   dedupeContacts,
   autoEnroll,
+  aiReplyDecision,
   hasSteps,
   stateCounts,
 }: {
@@ -40,6 +41,7 @@ export function CampaignHeader({
   reviewBeforeSend: boolean;
   dedupeContacts: boolean;
   autoEnroll: boolean;
+  aiReplyDecision: boolean;
   hasSteps: boolean;
   stateCounts: { state: string; n: number }[];
 }) {
@@ -81,6 +83,18 @@ export function CampaignHeader({
       await updateCampaign(id, { autoEnroll: next });
       toast.success(
         next ? "Auto-enroll on — matching connections are added automatically" : "Auto-enroll off",
+      );
+      router.refresh();
+    });
+  }
+
+  function toggleAiReply(next: boolean) {
+    start(async () => {
+      await updateCampaign(id, { aiReplyDecision: next });
+      toast.success(
+        next
+          ? "AI reply triage on — auto-replies keep the sequence going"
+          : "AI reply triage off — any reply stops the sequence",
       );
       router.refresh();
     });
@@ -147,6 +161,10 @@ export function CampaignHeader({
             <label className="flex cursor-pointer items-center gap-2 text-sm">
               <Switch checked={reviewBeforeSend} onCheckedChange={toggleReview} disabled={pending} />
               Review AI before sending
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <Switch checked={aiReplyDecision} onCheckedChange={toggleAiReply} disabled={pending} />
+              AI triage replies
             </label>
             {isActive ? (
               <Button size="sm" variant="outline" onClick={() => setStatus("paused")} disabled={pending}>

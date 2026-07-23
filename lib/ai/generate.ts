@@ -130,3 +130,49 @@ export async function generateMessage(opts: GenerateOptions): Promise<GeneratedM
     model,
   };
 }
+
+const TRIAGE_SYSTEM = `You triage inbound LinkedIn replies for a B2B outreach tool.
+Decide ONE of:
+- "handoff": a genuine human reply a salesperson should personally handle — interested, a question, an objection, "not interested", "wrong person", "who is this", any real message from the person. Stop the automated sequence.
+- "continue": NOT a genuine reply — an out-of-office / vacation auto-responder, away message, automated acknowledgement, delivery/read receipt, or system notification. The outreach sequence should keep running.
+When unsure, prefer "handoff" (safer to involve a human).
+Respond with ONLY compact JSON: {"action":"handoff"|"continue","reason":"<=8 words"}`;
+
+export interface ReplyDecision {
+  action: "handoff" | "continue";
+  reason: string;
+}
+
+/**
+ * Classify an inbound reply as a genuine human reply (handoff) vs automated
+ * noise like out-of-office (continue). Defaults to "handoff" on any error.
+ */
+export async function classifyReply(
+  replyText: string,
+  prospectName?: string | null,
+): Promise<ReplyDecision> {
+  try {
+    const anthropic = await client();
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 120,
+      system: TRIAGE_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: `Reply from ${prospectName || "a prospect"}:\n"""${replyText}"""`,
+        },
+      ],
+    });
+    const txt = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("");
+    const match = txt.match(/\{[\s\S]*\}/);
+    const parsed = match ? (JSON.parse(match[0]) as Partial<ReplyDecision>) : null;
+    const action = parsed?.action === "continue" ? "continue" : "handoff";
+    return { action, reason: (parsed?.reason ?? "").slice(0, 120) };
+  } catch {
+    return { action: "handoff", reason: "classifier unavailable" };
+  }
+}
