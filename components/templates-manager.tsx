@@ -28,7 +28,18 @@ import {
   previewTemplateForConnection,
   sendTestMessage,
   improvePrompt,
+  improveTemplateBody,
 } from "@/app/(dashboard)/templates/actions";
+
+const TEMPLATE_VARS = [
+  "first_name",
+  "last_name",
+  "full_name",
+  "company",
+  "position",
+  "headline",
+  "country",
+];
 import { ConnectionPicker, type PickedConnection } from "@/components/connection-picker";
 import type { Template, AiPrompt } from "@/db/schema";
 
@@ -233,6 +244,8 @@ function TemplateDialog({
   const [picked, setPicked] = useState<PickedConnection | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [showVars, setShowVars] = useState(false);
 
   // Sync fields when dialog opens.
   const key = template?.id ?? "new";
@@ -242,7 +255,41 @@ function TemplateDialog({
     setBody(template?.body ?? "");
     setPicked(null);
     setPreview(null);
+    setShowVars(false);
   });
+
+  /** Insert {{name}} at the caret; if the user just typed "{{", replace it. */
+  function insertVar(varName: string) {
+    const el = document.getElementById("tpl-body") as HTMLTextAreaElement | null;
+    const token = `{{${varName}}}`;
+    const start = el?.selectionStart ?? body.length;
+    const end = el?.selectionEnd ?? body.length;
+    const before = body.slice(0, start);
+    const trimTwo = before.endsWith("{{"); // triggered by typing "{{"
+    const from = trimTwo ? start - 2 : start;
+    const next = body.slice(0, from) + token + body.slice(end);
+    setBody(next);
+    setShowVars(false);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      const pos = from + token.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }
+
+  function draftWithAi() {
+    setDrafting(true);
+    improveTemplateBody({ name, type, body })
+      .then((res) => {
+        if (res.error) toast.error(res.error);
+        else {
+          setBody(res.text ?? "");
+          toast.success("Drafted by AI — review and save");
+        }
+      })
+      .finally(() => setDrafting(false));
+  }
 
   function submit() {
     if (!name.trim() || !body.trim()) {
@@ -294,13 +341,68 @@ function TemplateDialog({
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label>Body</Label>
-            <Textarea
-              rows={6}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Hi {{first_name}}, ..."
-            />
+            <div className="flex items-center justify-between gap-2">
+              <Label>Body</Label>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={draftWithAi}
+                disabled={drafting}
+                title="Let AI draft or refine this template"
+              >
+                {drafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                Draft with AI
+              </Button>
+            </div>
+            <div className="relative">
+              <Textarea
+                id="tpl-body"
+                rows={6}
+                value={body}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const caret = e.target.selectionStart ?? val.length;
+                  setBody(val);
+                  // Show the variable list right after the user types "{{".
+                  setShowVars(val.slice(0, caret).endsWith("{{"));
+                }}
+                placeholder="Hi {{first_name}}, … (type {{ to insert a variable)"
+              />
+              {showVars && (
+                <div className="absolute left-2 top-full z-50 mt-1 w-56 rounded-md border bg-popover p-1 shadow-md">
+                  <p className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                    Insert a variable
+                  </p>
+                  {TEMPLATE_VARS.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => insertVar(v)}
+                      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted/60"
+                    >
+                      <Braces className="h-3 w-3 text-muted-foreground" />
+                      {`{{${v}}}`}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Always-available quick-insert chips */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-muted-foreground">Insert:</span>
+              {TEMPLATE_VARS.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => insertVar(v)}
+                  className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                >
+                  <Braces className="h-3 w-3" />
+                  {v}
+                </button>
+              ))}
+            </div>
             {type === "invite" && (
               <p className="text-xs text-muted-foreground">{body.length}/300 characters</p>
             )}

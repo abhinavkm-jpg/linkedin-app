@@ -155,6 +155,44 @@ Rules:
 
 Return ONLY the improved system prompt as plain text — no preamble, no code fences, no commentary.`;
 
+const TEMPLATE_WRITER_SYSTEM = `You write reusable LinkedIn outreach TEMPLATES for a B2B tool.
+Produce ONE message that uses {{placeholders}} for personalization.
+Available placeholders (use only these): {{first_name}}, {{last_name}}, {{full_name}}, {{company}}, {{position}}, {{headline}}, {{country}}.
+
+Rules:
+- If type is "invite": a connection-request note, MAX 300 characters, personalized reason to connect, no pitch and no meeting ask.
+- If type is "message": a first message, 50-120 words, confident executive B2B tone, no hard pitch.
+- Use {{first_name}} at least once; add other placeholders only where they read naturally.
+- No emojis, hashtags, or em dashes. Sound like a real person, not a script.
+- If an existing draft is given, refine/rewrite it keeping its intent; otherwise write a strong default for the stated purpose (use the template name as the intent).
+
+Return ONLY the message text with placeholders — no preamble, quotes, or commentary.`;
+
+/** Draft or refine a reusable message template (with {{placeholders}}) via AI. */
+export async function draftTemplate(input: {
+  name: string;
+  type: "invite" | "message";
+  draft: string;
+}): Promise<string> {
+  const anthropic = await client();
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 600,
+    system: TEMPLATE_WRITER_SYSTEM,
+    messages: [
+      {
+        role: "user",
+        content: `Type: ${input.type}\nName / intent: ${input.name || "(untitled)"}\nExisting draft: ${input.draft.trim() || "none"}`,
+      },
+    ],
+  });
+  return response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+    .trim();
+}
+
 /** Analyze a user's draft and return a cleaned-up, well-structured system prompt. */
 export async function improveSystemPrompt(draft: string): Promise<string> {
   const anthropic = await client();

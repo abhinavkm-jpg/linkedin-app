@@ -8,6 +8,7 @@ import { templates, aiPrompts, connections, linkedinAccounts, chats, activities 
 import {
   generateMessage,
   improveSystemPrompt,
+  draftTemplate,
   type OutreachStep,
   type ProspectContext,
 } from "@/lib/ai/generate";
@@ -220,6 +221,20 @@ export async function deleteTemplate(id: string): Promise<void> {
   await requireUser();
   await db.delete(templates).where(eq(templates.id, id));
   revalidatePath("/templates");
+}
+
+/** Draft or refine a message template body (with {{placeholders}}) via AI. */
+export async function improveTemplateBody(input: {
+  name: string;
+  type: "invite" | "message";
+  body: string;
+}): Promise<{ text?: string; error?: string }> {
+  await requireUser();
+  try {
+    return { text: await draftTemplate({ name: input.name, type: input.type, draft: input.body }) };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to draft the template" };
+  }
 }
 
 /** Rewrite a rough prompt draft into a clean, structured system prompt. */
