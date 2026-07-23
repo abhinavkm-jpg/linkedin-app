@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Sparkles, Loader2, FileText, Send } from "lucide-react";
+import { Plus, Pencil, Trash2, Sparkles, Loader2, FileText, Send, Info } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -475,13 +475,22 @@ function PromptDialog({
               onChange={(e) => setSystemPrompt(e.target.value)}
               className="font-mono text-xs"
             />
-            <p className="text-xs text-muted-foreground">
-              This is the <span className="font-medium">voice &amp; rules</span> used for every step.
-              You don&apos;t write per-message copy here — the app automatically adds the right
-              guidance for each step (connection request → welcome → follow-ups) based on its
-              position in the sequence. Use one prompt per campaign unless a step needs a different
-              voice.
-            </p>
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:border-blue-400/25 dark:bg-blue-400/10 dark:text-blue-200">
+              <p className="mb-1.5 flex items-center gap-1.5 font-medium">
+                <Info className="h-3.5 w-3.5" /> How this prompt works
+              </p>
+              <ul className="list-disc space-y-1 pl-4">
+                <li>
+                  This is the <span className="font-medium">voice &amp; rules</span> used for every
+                  step — not per-message copy.
+                </li>
+                <li>
+                  The app auto-adds the right guidance per step (connection request → welcome →
+                  follow-ups) based on its position in the sequence.
+                </li>
+                <li>Use one prompt per campaign; make a separate one only if a step needs a different voice.</li>
+              </ul>
+            </div>
           </div>
           <div className="space-y-2 rounded-md border bg-muted/20 p-3">
             <p className="text-xs font-medium text-muted-foreground">
