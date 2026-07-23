@@ -5,7 +5,12 @@ import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { templates, aiPrompts, connections, linkedinAccounts, chats, activities } from "@/db/schema";
-import { generateMessage, type OutreachStep, type ProspectContext } from "@/lib/ai/generate";
+import {
+  generateMessage,
+  improveSystemPrompt,
+  type OutreachStep,
+  type ProspectContext,
+} from "@/lib/ai/generate";
 import { renderTemplate, templateVarsFromConnection } from "@/lib/templates";
 import { getConnections } from "@/lib/data-connections";
 import { getAccessibleAccountIds } from "@/lib/access";
@@ -215,6 +220,18 @@ export async function deleteTemplate(id: string): Promise<void> {
   await requireUser();
   await db.delete(templates).where(eq(templates.id, id));
   revalidatePath("/templates");
+}
+
+/** Rewrite a rough prompt draft into a clean, structured system prompt. */
+export async function improvePrompt(
+  draft: string,
+): Promise<{ text?: string; error?: string }> {
+  await requireUser();
+  try {
+    return { text: await improveSystemPrompt(draft) };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to improve the prompt" };
+  }
 }
 
 export async function saveAiPrompt(input: {

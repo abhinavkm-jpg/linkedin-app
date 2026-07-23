@@ -143,6 +143,41 @@ export interface ReplyDecision {
   reason: string;
 }
 
+const PROMPT_ARCHITECT_SYSTEM = `You are a senior prompt engineer for a B2B LinkedIn outreach tool.
+Rewrite the user's rough draft into a clean, well-structured SYSTEM PROMPT that defines the VOICE and RULES for AI-written outreach messages (connection notes, welcomes, follow-ups).
+
+Rules:
+- Preserve the user's intent, product/company, target audience, and any specific rules they gave.
+- Organize into clear labeled sections: Role & voice, Objective, Writing style, Personalization, Hard rules / avoid, Message length.
+- This prompt defines voice and rules ONLY. Do NOT write example messages or per-step copy — the tool adds stage-specific guidance (connection request, welcome, follow-ups) automatically.
+- Keep it concise, directive, and professional (executive B2B tone). No emojis or hashtags.
+- If the draft is empty or minimal, produce a strong sensible default for executive B2B outreach.
+
+Return ONLY the improved system prompt as plain text — no preamble, no code fences, no commentary.`;
+
+/** Analyze a user's draft and return a cleaned-up, well-structured system prompt. */
+export async function improveSystemPrompt(draft: string): Promise<string> {
+  const anthropic = await client();
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 1500,
+    system: PROMPT_ARCHITECT_SYSTEM,
+    messages: [
+      {
+        role: "user",
+        content: draft.trim()
+          ? `Improve and structure this draft system prompt:\n"""${draft}"""`
+          : "No draft provided — write a strong default executive B2B outreach system prompt.",
+      },
+    ],
+  });
+  return response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+    .trim();
+}
+
 /**
  * Classify an inbound reply as a genuine human reply (handoff) vs automated
  * noise like out-of-office (continue). Defaults to "handoff" on any error.

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Sparkles, Loader2, FileText, Send, Info } from "lucide-react";
+import { Plus, Pencil, Trash2, Sparkles, Loader2, FileText, Send, Info, Wand2 } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,7 @@ import {
   previewAiMessage,
   previewTemplateForConnection,
   sendTestMessage,
+  improvePrompt,
 } from "@/app/(dashboard)/templates/actions";
 import { ConnectionPicker, type PickedConnection } from "@/components/connection-picker";
 import type { Template, AiPrompt } from "@/db/schema";
@@ -392,6 +393,7 @@ function PromptDialog({
   const [systemPrompt, setSystemPrompt] = useState("");
   const [picked, setPicked] = useState<PickedConnection | null>(null);
   const [step, setStep] = useState("welcome");
+  const [improving, setImproving] = useState(false);
 
   const key = prompt?.id ?? "new";
   useSyncOnOpen(open, key, () => {
@@ -414,6 +416,19 @@ function PromptDialog({
       toast.success("Prompt saved");
       onOpenChange(false);
     });
+  }
+
+  function improve() {
+    setImproving(true);
+    improvePrompt(systemPrompt)
+      .then((res) => {
+        if (res.error) toast.error(res.error);
+        else {
+          setSystemPrompt(res.text ?? "");
+          toast.success("Structured by AI — review and save");
+        }
+      })
+      .finally(() => setImproving(false));
   }
 
   function runPreview() {
@@ -468,7 +483,20 @@ function PromptDialog({
             Use as default prompt
           </label>
           <div className="space-y-1.5">
-            <Label>System prompt</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label>System prompt</Label>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={improve}
+                disabled={improving}
+                title="Let AI clean up and structure your prompt"
+              >
+                {improving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                Structure with AI
+              </Button>
+            </div>
             <Textarea
               rows={10}
               value={systemPrompt}
