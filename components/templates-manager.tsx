@@ -485,10 +485,24 @@ function PromptDialog({
                   step — not per-message copy.
                 </li>
                 <li>
-                  The app auto-adds the right guidance per step (connection request → welcome →
-                  follow-ups) based on its position in the sequence.
+                  The app auto-adds the right guidance per step based on its position in the
+                  sequence.
                 </li>
-                <li>Use one prompt per campaign; make a separate one only if a step needs a different voice.</li>
+                <li>
+                  <span className="font-medium">Across follow-ups your voice stays the same</span>,
+                  but the goal shifts automatically:
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    <li>Welcome — warm intro after they accept, no pitch</li>
+                    <li>Follow-up 1 — one insight about them + one open question</li>
+                    <li>Follow-up 2 — understand their priorities/challenges (still no pitch)</li>
+                    <li>Follow-up 3 — tie their challenge to a pattern, light credibility</li>
+                  </ul>
+                </li>
+                <li>
+                  So editing this prompt changes the <span className="font-medium">tone and rules of
+                  every follow-up</span> at once. Use one prompt per campaign; make a separate one
+                  only if a step needs a different voice.
+                </li>
               </ul>
             </div>
           </div>
