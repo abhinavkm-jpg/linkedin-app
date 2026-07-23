@@ -53,6 +53,7 @@ export default async function CampaignDetailPage({
       .select({
         enrollmentId: enrollments.id,
         state: enrollments.state,
+        nextRunAt: enrollments.nextRunAt,
         firstName: connections.firstName,
         lastName: connections.lastName,
         headline: connections.headline,
@@ -203,6 +204,7 @@ export default async function CampaignDetailPage({
                   state: e.state,
                   name: [e.firstName, e.lastName].filter(Boolean).join(" ") || e.headline || "Unknown",
                   headline: e.headline,
+                  nextRunAt: e.nextRunAt ? e.nextRunAt.toISOString() : null,
                 }))}
               />
             </AccordionContent>

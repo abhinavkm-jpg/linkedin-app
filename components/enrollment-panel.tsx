@@ -4,10 +4,22 @@ import { useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { UserPlus, Loader2, Zap } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { UserPlus, Loader2, Zap, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/status-pill";
 import { enrollMatchingIcp } from "@/app/(dashboard)/campaigns/actions";
+
+/** When the next action for this enrollment is scheduled, in words. */
+function scheduleLabel(state: string, nextRunAt: string | null): string | null {
+  if (["replied", "completed", "skipped", "failed"].includes(state)) return null;
+  if (state === "awaiting_accept") return "awaiting acceptance";
+  if (state === "paused") return "awaiting review";
+  if (!nextRunAt) return null;
+  const when = new Date(nextRunAt);
+  if (when.getTime() <= Date.now()) return "due now";
+  return `in ${formatDistanceToNow(when)}`;
+}
 
 export function EnrollmentPanel({
   campaignId,
@@ -20,7 +32,13 @@ export function EnrollmentPanel({
   hasIcp: boolean;
   autoEnroll: boolean;
   matchCount: number | null;
-  enrolled: { enrollmentId: string; state: string; name: string; headline: string | null }[];
+  enrolled: {
+    enrollmentId: string;
+    state: string;
+    name: string;
+    headline: string | null;
+    nextRunAt: string | null;
+  }[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -81,17 +99,26 @@ export function EnrollmentPanel({
             <p className="text-sm text-muted-foreground">No one enrolled yet.</p>
           ) : (
             <ul className="divide-y rounded-md border">
-              {enrolled.map((e) => (
-                <li key={e.enrollmentId} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{e.name}</p>
-                    {e.headline && (
-                      <p className="truncate text-xs text-muted-foreground">{e.headline}</p>
+              {enrolled.map((e) => {
+                const sched = scheduleLabel(e.state, e.nextRunAt);
+                return (
+                  <li key={e.enrollmentId} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{e.name}</p>
+                      {e.headline && (
+                        <p className="truncate text-xs text-muted-foreground">{e.headline}</p>
+                      )}
+                    </div>
+                    {sched && (
+                      <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground sm:inline-flex">
+                        <Clock className="h-3 w-3" />
+                        {sched}
+                      </span>
                     )}
-                  </div>
-                  <StatusPill status={e.state} className="shrink-0" />
-                </li>
-              ))}
+                    <StatusPill status={e.state} className="shrink-0" />
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
