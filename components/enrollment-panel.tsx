@@ -10,15 +10,18 @@ import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/status-pill";
 import { enrollMatchingIcp } from "@/app/(dashboard)/campaigns/actions";
 
-/** When the next action for this enrollment is scheduled, in words. */
-function scheduleLabel(state: string, nextRunAt: string | null): string | null {
+/** When the next action for this enrollment is scheduled, in words + urgency. */
+function scheduleLabel(
+  state: string,
+  nextRunAt: string | null,
+): { text: string; due: boolean } | null {
   if (["replied", "completed", "skipped", "failed"].includes(state)) return null;
-  if (state === "awaiting_accept") return "awaiting acceptance";
-  if (state === "paused") return "awaiting review";
+  if (state === "awaiting_accept") return { text: "awaiting acceptance", due: false };
+  if (state === "paused") return { text: "awaiting review", due: false };
   if (!nextRunAt) return null;
   const when = new Date(nextRunAt);
-  if (when.getTime() <= Date.now()) return "due now";
-  return `in ${formatDistanceToNow(when)}`;
+  if (when.getTime() <= Date.now()) return { text: "due now", due: true };
+  return { text: `in ${formatDistanceToNow(when)}`, due: false };
 }
 
 export function EnrollmentPanel({
@@ -110,9 +113,16 @@ export function EnrollmentPanel({
                       )}
                     </div>
                     {sched && (
-                      <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground sm:inline-flex">
+                      <span
+                        className={
+                          "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs " +
+                          (sched.due
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : "text-muted-foreground")
+                        }
+                      >
                         <Clock className="h-3 w-3" />
-                        {sched}
+                        {sched.text}
                       </span>
                     )}
                     <StatusPill status={e.state} className="shrink-0" />
