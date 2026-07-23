@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Sparkles, Loader2, FileText, Send, Info, Wand2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Sparkles, Loader2, FileText, Send, Info, Wand2, Mail, UserPlus, Braces, Megaphone } from "lucide-react";
+import { extractPlaceholders } from "@/lib/templates";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,21 +69,31 @@ const MODELS = [
 export function TemplatesManager({
   templates,
   prompts,
+  templateUsage = {},
+  promptUsage = {},
 }: {
   templates: Template[];
   prompts: AiPrompt[];
+  templateUsage?: Record<string, number>;
+  promptUsage?: Record<string, number>;
 }) {
   return (
     <div className="space-y-8">
-      <TemplatesSection templates={templates} />
-      <PromptsSection prompts={prompts} />
+      <TemplatesSection templates={templates} usage={templateUsage} />
+      <PromptsSection prompts={prompts} usage={promptUsage} />
     </div>
   );
 }
 
 /* -------------------------------------------------------------------------- */
 
-function TemplatesSection({ templates }: { templates: Template[] }) {
+function TemplatesSection({
+  templates,
+  usage,
+}: {
+  templates: Template[];
+  usage: Record<string, number>;
+}) {
   const [editing, setEditing] = useState<Template | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -126,36 +137,78 @@ function TemplatesSection({ templates }: { templates: Template[] }) {
         </EmptyState>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
-          {templates.map((t) => (
-            <Card key={t.id}>
-              <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
-                <div className="min-w-0">
-                  <CardTitle className="truncate text-sm">{t.name}</CardTitle>
-                  <Badge variant="outline" className="mt-1">
-                    {t.type}
-                  </Badge>
-                </div>
-                <div className="flex gap-1">
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setEditing(t);
-                      setOpen(true);
-                    }}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <DeleteButton onDelete={() => deleteTemplate(t.id)} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">
-                  {t.body}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
+          {templates.map((t) => {
+            const isInvite = t.type === "invite";
+            const placeholders = extractPlaceholders(t.body);
+            const used = usage[t.id] ?? 0;
+            return (
+              <Card
+                key={t.id}
+                className="relative overflow-hidden transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+              >
+                <div className={`absolute inset-x-0 top-0 h-1 ${isInvite ? "bg-amber-400" : "bg-blue-500"}`} />
+                <CardHeader className="flex-row items-start justify-between gap-2 space-y-0 pt-5">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                        isInvite
+                          ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                          : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                      }`}
+                    >
+                      {isInvite ? <UserPlus className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="truncate text-sm">{t.name}</CardTitle>
+                      <Badge variant="outline" className="mt-1 capitalize">
+                        {t.type}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setEditing(t);
+                        setOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <DeleteButton onDelete={() => deleteTemplate(t.id)} />
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">
+                    {t.body}
+                  </p>
+                  {placeholders.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {placeholders.map((p) => (
+                        <span
+                          key={p}
+                          className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground"
+                        >
+                          <Braces className="h-3 w-3" />
+                          {p}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between border-t pt-2 text-xs text-muted-foreground">
+                    <span>
+                      {t.body.length} chars{isInvite ? " · max 300" : ""}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Megaphone className="h-3 w-3" />
+                      {used === 0 ? "unused" : `${used} step${used === 1 ? "" : "s"}`}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -292,7 +345,13 @@ function TemplateDialog({
 
 /* -------------------------------------------------------------------------- */
 
-function PromptsSection({ prompts }: { prompts: AiPrompt[] }) {
+function PromptsSection({
+  prompts,
+  usage,
+}: {
+  prompts: AiPrompt[];
+  usage: Record<string, number>;
+}) {
   const [editing, setEditing] = useState<AiPrompt | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -336,37 +395,57 @@ function PromptsSection({ prompts }: { prompts: AiPrompt[] }) {
         </EmptyState>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
-          {prompts.map((p) => (
-            <Card key={p.id}>
-              <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
-                <div className="min-w-0">
-                  <CardTitle className="truncate text-sm">{p.name}</CardTitle>
-                  <div className="mt-1 flex gap-1">
-                    <Badge variant="outline">{p.model}</Badge>
-                    {p.isDefault && <Badge>default</Badge>}
+          {prompts.map((p) => {
+            const words = p.systemPrompt.trim() ? p.systemPrompt.trim().split(/\s+/).length : 0;
+            const used = usage[p.id] ?? 0;
+            return (
+              <Card
+                key={p.id}
+                className="relative overflow-hidden transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+              >
+                <div className="absolute inset-x-0 top-0 h-1 bg-violet-500" />
+                <CardHeader className="flex-row items-start justify-between gap-2 space-y-0 pt-5">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="truncate text-sm">{p.name}</CardTitle>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <Badge variant="outline">{p.model}</Badge>
+                        {p.isDefault && <Badge>default</Badge>}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="flex gap-1">
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setEditing(p);
-                      setOpen(true);
-                    }}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <DeleteButton onDelete={() => deleteAiPrompt(p.id)} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">
-                  {p.systemPrompt}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setEditing(p);
+                        setOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <DeleteButton onDelete={() => deleteAiPrompt(p.id)} />
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">
+                    {p.systemPrompt}
+                  </p>
+                  <div className="flex items-center justify-between border-t pt-2 text-xs text-muted-foreground">
+                    <span>{words} words</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Megaphone className="h-3 w-3" />
+                      {used === 0 ? "unused" : `${used} step${used === 1 ? "" : "s"}`}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
