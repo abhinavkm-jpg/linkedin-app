@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { Send, Loader2, MessageSquare, ExternalLink, Bot } from "lucide-react";
+import { Send, Loader2, MessageSquare, ExternalLink, Bot, Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -69,20 +70,36 @@ function initials(name: string | null): string {
     .toUpperCase();
 }
 
+type Tab = "all" | "unread" | "handoff";
+
 export function InboxList({ chats }: { chats: InboxRow[] }) {
   const router = useRouter();
   const [active, setActive] = useState<InboxRow | null>(null);
   const [, startRead] = useTransition();
+  const [query, setQuery] = useState("");
+  const [account, setAccount] = useState("");
+  const [tab, setTab] = useState<Tab>("all");
 
-  if (chats.length === 0) {
-    return (
-      <EmptyState
-        icon={MessageSquare}
-        title="No conversations yet"
-        description="Replies from your prospects will show up here as soon as they come in."
-      />
-    );
-  }
+  const accountNames = useMemo(
+    () => [...new Set(chats.map((c) => c.accountName).filter(Boolean) as string[])].sort(),
+    [chats],
+  );
+  const unreadTotal = chats.reduce((n, c) => n + (c.unreadCount > 0 ? 1 : 0), 0);
+  const handoffTotal = chats.reduce((n, c) => n + (c.aiDecision === "handoff" ? 1 : 0), 0);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return chats.filter((c) => {
+      if (account && c.accountName !== account) return false;
+      if (tab === "unread" && c.unreadCount === 0) return false;
+      if (tab === "handoff" && c.aiDecision !== "handoff") return false;
+      if (q) {
+        const hay = `${c.name} ${c.headline ?? ""} ${c.lastMessageText ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [chats, query, account, tab]);
 
   function open(chat: InboxRow) {
     setActive(chat);
@@ -94,12 +111,65 @@ export function InboxList({ chats }: { chats: InboxRow[] }) {
     }
   }
 
+  if (chats.length === 0) {
+    return (
+      <EmptyState
+        icon={MessageSquare}
+        title="No conversations yet"
+        description="Replies from your prospects will show up here as soon as they come in."
+      />
+    );
+  }
+
+  const selectClass =
+    "h-9 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+
   return (
     <>
+      {/* Toolbar: search · account · segmented filter */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-56 flex-1">
+          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search a name or message…"
+            className="pl-8"
+          />
+        </div>
+        {accountNames.length > 1 && (
+          <select className={selectClass} value={account} onChange={(e) => setAccount(e.target.value)}>
+            <option value="">All accounts</option>
+            {accountNames.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+        )}
+        <div className="inline-flex rounded-md border p-0.5">
+          <TabButton active={tab === "all"} onClick={() => setTab("all")}>
+            All
+          </TabButton>
+          <TabButton active={tab === "unread"} onClick={() => setTab("unread")}>
+            Unread{unreadTotal > 0 ? ` (${unreadTotal})` : ""}
+          </TabButton>
+          {handoffTotal > 0 && (
+            <TabButton active={tab === "handoff"} onClick={() => setTab("handoff")}>
+              Needs you ({handoffTotal})
+            </TabButton>
+          )}
+        </div>
+      </div>
+
       <div className="space-y-2">
-        {chats.map((c) => (
-          <ChatRowButton key={c.id} chat={c} onOpen={() => open(c)} />
-        ))}
+        {filtered.length === 0 ? (
+          <p className="rounded-lg border bg-muted/20 py-12 text-center text-sm text-muted-foreground">
+            No conversations match these filters.
+          </p>
+        ) : (
+          filtered.map((c) => <ChatRowButton key={c.id} chat={c} onOpen={() => open(c)} />)
+        )}
       </div>
 
       <ChatDialog
@@ -114,13 +184,36 @@ export function InboxList({ chats }: { chats: InboxRow[] }) {
   );
 }
 
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded px-3 py-1 text-sm font-medium transition-colors",
+        active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 function ChatRowButton({ chat, onOpen }: { chat: InboxRow; onOpen: () => void }) {
   const unread = chat.unreadCount > 0;
   return (
     <Card
       className={cn(
-        "overflow-hidden transition-colors hover:border-primary/40 hover:shadow-sm",
-        unread && "border-l-4 border-l-primary",
+        "overflow-hidden transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md",
+        unread && "border-l-4 border-l-primary bg-primary/[0.04]",
       )}
     >
       <button
