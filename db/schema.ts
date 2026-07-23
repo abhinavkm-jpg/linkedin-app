@@ -415,6 +415,10 @@ export const chats = pgTable(
     lastMessageText: text("last_message_text"),
     lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
     unreadCount: integer("unread_count").notNull().default(0),
+    // Latest AI reply-triage decision for this conversation ("handoff" | "continue")
+    // and its short reason — shown in the Inbox for transparency.
+    aiDecision: text("ai_decision"),
+    aiReason: text("ai_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("chats_account_idx").on(t.accountId)],

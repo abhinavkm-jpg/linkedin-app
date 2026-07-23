@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { Send, Loader2, MessageSquare, ExternalLink } from "lucide-react";
+import { Send, Loader2, MessageSquare, ExternalLink, Bot } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,29 @@ export interface InboxRow {
   lastMessageText: string | null;
   lastMessageAt: string | null;
   unreadCount: number;
+  aiDecision: string | null;
+  aiReason: string | null;
   accountName: string | null;
+}
+
+/** Small transparency note showing the AI reply-triage decision + reason. */
+function AiNote({ decision, reason }: { decision: string | null; reason: string | null }) {
+  if (!decision) return null;
+  const handedOff = decision === "handoff";
+  return (
+    <span
+      className={cn(
+        "mt-0.5 inline-flex items-center gap-1 text-xs",
+        handedOff ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground",
+      )}
+    >
+      <Bot className="h-3 w-3 shrink-0" />
+      <span className="truncate">
+        {handedOff ? "Handed off" : "Kept sequence"}
+        {reason ? ` — ${reason}` : ""}
+      </span>
+    </span>
+  );
 }
 
 function initials(name: string | null): string {
@@ -137,6 +159,7 @@ function ChatRowButton({ chat, onOpen }: { chat: InboxRow; onOpen: () => void })
           >
             {chat.lastMessageText}
           </p>
+          <AiNote decision={chat.aiDecision} reason={chat.aiReason} />
         </div>
 
         {chat.lastMessageAt && (
@@ -222,6 +245,7 @@ function ChatDialog({ chat, onClose }: { chat: InboxRow | null; onClose: () => v
                     </a>
                   )}
                 </div>
+                <AiNote decision={chat.aiDecision} reason={chat.aiReason} />
               </div>
             </DialogHeader>
 

@@ -29,6 +29,8 @@ export default async function InboxPage() {
         lastMessageText: chats.lastMessageText,
         lastMessageAt: chats.lastMessageAt,
         unreadCount: chats.unreadCount,
+        aiDecision: chats.aiDecision,
+        aiReason: chats.aiReason,
         accountName: linkedinAccounts.name,
         firstName: connections.firstName,
         lastName: connections.lastName,
@@ -55,6 +57,8 @@ export default async function InboxPage() {
         lastMessageText: c.lastMessageText,
         lastMessageAt: c.lastMessageAt ? c.lastMessageAt.toISOString() : null,
         unreadCount: c.unreadCount,
+        aiDecision: c.aiDecision,
+        aiReason: c.aiReason,
         accountName: c.accountName,
       };
     });

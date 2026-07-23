@@ -255,6 +255,13 @@ export async function POST(req: Request) {
           const res = await classifyReply(text, attendeeName ?? conn.firstName ?? null);
           decision = res.action;
           console.log(`[webhook] AI reply triage for ${conn.id}: ${res.action} — ${res.reason}`);
+          // Record the decision on the chat so it's visible in the Inbox.
+          if (chatId) {
+            await db
+              .update(chats)
+              .set({ aiDecision: res.action, aiReason: res.reason })
+              .where(eq(chats.unipileChatId, chatId));
+          }
         }
 
         // Stop an enrollment when its campaign isn't AI-gated, or the AI said handoff.
