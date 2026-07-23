@@ -67,7 +67,6 @@ export async function addStep(
     aiPromptId?: string | null;
     model?: string | null;
     delayHours: number;
-    stopOnReply: boolean;
   },
 ): Promise<void> {
   await requireUser();
@@ -84,7 +83,6 @@ export async function addStep(
     aiPromptId: input.aiPromptId ?? null,
     model: input.model ?? null,
     delayHours: input.delayHours,
-    stopOnReply: input.stopOnReply,
   });
   revalidatePath(`/campaigns/${campaignId}`);
 }
@@ -148,7 +146,6 @@ export async function updateStep(
     templateId?: string | null;
     aiPromptId?: string | null;
     delayHours: number;
-    stopOnReply: boolean;
   },
 ): Promise<void> {
   await requireUser();
@@ -160,7 +157,6 @@ export async function updateStep(
       templateId: input.sourceType === "template" ? input.templateId ?? null : null,
       aiPromptId: input.sourceType === "ai" ? input.aiPromptId ?? null : null,
       delayHours: input.delayHours,
-      stopOnReply: input.stopOnReply,
     })
     .where(eq(sequenceSteps.id, stepId));
   revalidatePath(`/campaigns/${campaignId}`);

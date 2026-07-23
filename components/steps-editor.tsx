@@ -7,7 +7,6 @@ import { Plus, Pencil, Trash2, Loader2, Mail, UserPlus, ChevronUp, ChevronDown }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { addStep, updateStep, moveStep, deleteStep } from "@/app/(dashboard)/campaigns/actions";
 import type { SequenceStep, Template, AiPrompt } from "@/db/schema";
 
@@ -17,7 +16,6 @@ interface StepValues {
   templateId: string;
   aiPromptId: string;
   delayHours: number;
-  stopOnReply: boolean;
 }
 
 /** Show a stored hours value in the friendliest unit (whole days when it divides evenly). */
@@ -73,7 +71,6 @@ export function StepsEditor({
                       templateId: step.templateId ?? "",
                       aiPromptId: step.aiPromptId ?? "",
                       delayHours: step.delayHours,
-                      stopOnReply: step.stopOnReply,
                     }}
                     submitLabel="Save step"
                     onCancel={() => setEditingId(null)}
@@ -84,7 +81,6 @@ export function StepsEditor({
                         templateId: v.templateId || null,
                         aiPromptId: v.aiPromptId || null,
                         delayHours: v.delayHours,
-                        stopOnReply: v.stopOnReply,
                       });
                       setEditingId(null);
                     }}
@@ -108,7 +104,6 @@ export function StepsEditor({
                     <span className="text-muted-foreground">
                       via {step.sourceType === "ai" ? "AI" : "template"} ·{" "}
                       {i === 0 ? "sends immediately" : `after ${formatDelay(step.delayHours)}`}
-                      {step.stopOnReply ? " · stops on reply" : ""}
                     </span>
                   </div>
                   {editable && (
@@ -151,7 +146,6 @@ export function StepsEditor({
                   templateId: v.templateId || null,
                   aiPromptId: v.aiPromptId || null,
                   delayHours: v.delayHours,
-                  stopOnReply: v.stopOnReply,
                 });
                 setAdding(false);
               }}
@@ -222,7 +216,6 @@ function StepForm({
       templateId: "",
       aiPromptId: "",
       delayHours: 24,
-      stopOnReply: true,
     },
   );
   const initDelay = splitDelay(initial?.delayHours ?? 24);
@@ -335,13 +328,10 @@ function StepForm({
         </div>
       )}
 
-      <label className="flex cursor-pointer items-center gap-2 text-sm sm:col-span-2">
-        <Switch
-          checked={v.stopOnReply}
-          onCheckedChange={(c) => setV({ ...v, stopOnReply: c })}
-        />
-        Stop the sequence if they reply
-      </label>
+      <p className="text-xs text-muted-foreground sm:col-span-2">
+        Replies are handled per campaign (see the header): by default any reply stops the sequence,
+        or turn on <span className="font-medium">AI triage replies</span> to let the AI decide.
+      </p>
 
       <div className="flex gap-2 sm:col-span-2">
         <Button size="sm" onClick={submit} disabled={pending}>
