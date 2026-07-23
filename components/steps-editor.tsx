@@ -294,6 +294,10 @@ function StepForm({
               </option>
             ))}
           </select>
+          <p className="text-xs text-muted-foreground">
+            Sets the voice. This step&apos;s style (welcome / follow-up) is applied automatically by
+            its position — leave &ldquo;Default prompt&rdquo; unless this step needs a different voice.
+          </p>
         </div>
       )}
 

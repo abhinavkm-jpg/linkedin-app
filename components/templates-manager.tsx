@@ -30,12 +30,32 @@ import {
 import { ConnectionPicker, type PickedConnection } from "@/components/connection-picker";
 import type { Template, AiPrompt } from "@/db/schema";
 
-const PREVIEW_STEPS: { value: string; label: string }[] = [
-  { value: "connection_request", label: "Connection request" },
-  { value: "welcome", label: "Welcome (after accept)" },
-  { value: "follow_up_1", label: "Follow-up 1" },
-  { value: "follow_up_2", label: "Follow-up 2" },
-  { value: "follow_up_3", label: "Follow-up 3" },
+const PREVIEW_STEPS: { value: string; label: string; description: string }[] = [
+  {
+    value: "connection_request",
+    label: "Connection request",
+    description: "Invite note — ≤300 chars, personalized reason to connect, no pitch.",
+  },
+  {
+    value: "welcome",
+    label: "Welcome (after accept)",
+    description: "First message once they accept — thank them, reference something relevant, no pitch.",
+  },
+  {
+    value: "follow_up_1",
+    label: "Follow-up 1",
+    description: "Share one insight about their role/market and ask one open question.",
+  },
+  {
+    value: "follow_up_2",
+    label: "Follow-up 2",
+    description: "Go deeper — understand their process, priorities or challenges. No solutions yet.",
+  },
+  {
+    value: "follow_up_3",
+    label: "Follow-up 3",
+    description: "Tie their challenge to a pattern you've seen; light credibility; focus on their outcome.",
+  },
 ];
 
 const MODELS = [
@@ -455,6 +475,13 @@ function PromptDialog({
               onChange={(e) => setSystemPrompt(e.target.value)}
               className="font-mono text-xs"
             />
+            <p className="text-xs text-muted-foreground">
+              This is the <span className="font-medium">voice &amp; rules</span> used for every step.
+              You don&apos;t write per-message copy here — the app automatically adds the right
+              guidance for each step (connection request → welcome → follow-ups) based on its
+              position in the sequence. Use one prompt per campaign unless a step needs a different
+              voice.
+            </p>
           </div>
           <div className="space-y-2 rounded-md border bg-muted/20 p-3">
             <p className="text-xs font-medium text-muted-foreground">
@@ -475,6 +502,10 @@ function PromptDialog({
                 ))}
               </select>
             </div>
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium">Stage:</span>{" "}
+              {PREVIEW_STEPS.find((s) => s.value === step)?.description}
+            </p>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={runPreview} disabled={previewing || !systemPrompt}>
                 {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
