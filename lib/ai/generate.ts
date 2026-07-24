@@ -63,6 +63,18 @@ function buildProspectBlock(p: ProspectContext): string {
   return lines.join("\n");
 }
 
+/**
+ * Baseline formatting applied to every generated message (appended to whatever
+ * system prompt is in use) so output is readable, not a single dense paragraph.
+ */
+const FORMATTING_RULES = `FORMATTING (always follow, in addition to the rules above):
+- Write a real, well-formatted LinkedIn message — never one long block of text.
+- Start with a greeting line addressing them by first name (e.g. "Hi {{first_name}},"), then a blank line.
+- Body: 1-3 short paragraphs, each 1-2 sentences, separated by a blank line.
+- End with a brief sign-off on its own line (e.g. "Best," then your first name, or "Thanks").
+- Use real line breaks (newlines) between the greeting, paragraphs, and sign-off so the spacing is preserved.
+- Exception: a connection-request note (max 300 characters) should be 2-3 concise lines without blank-line spacing.`;
+
 export interface GenerateOptions {
   step: OutreachStep;
   prospect: ProspectContext;
@@ -87,7 +99,10 @@ export interface GeneratedMessage {
  */
 export async function generateMessage(opts: GenerateOptions): Promise<GeneratedMessage> {
   const model = opts.model || DEFAULT_AI_MODEL;
-  const system = opts.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+  // Always apply a baseline formatting standard on top of the user's prompt so
+  // messages read like real LinkedIn DMs (greeting, short paragraphs, sign-off)
+  // rather than one dense block.
+  const system = `${opts.systemPrompt || DEFAULT_SYSTEM_PROMPT}\n\n${FORMATTING_RULES}`;
 
   const parts: string[] = [
     STEP_INSTRUCTIONS[opts.step],
