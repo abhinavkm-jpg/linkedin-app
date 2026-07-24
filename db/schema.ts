@@ -238,6 +238,11 @@ export const templates = pgTable("templates", {
 
 export const aiPrompts = pgTable("ai_prompts", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Owner scoping: an admin's prompt is shared to everyone; a member's is
+  // private to them. Null = legacy/seeded → treated as shared.
+  ownerUserId: uuid("owner_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   name: text("name").notNull(),
   systemPrompt: text("system_prompt").notNull(),
   model: text("model").notNull().default("claude-sonnet-5"),

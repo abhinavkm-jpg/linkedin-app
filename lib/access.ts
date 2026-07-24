@@ -1,7 +1,7 @@
 import "server-only";
-import { eq, inArray, sql, type SQL, type Column } from "drizzle-orm";
+import { eq, or, isNull, inArray, sql, type SQL, type Column } from "drizzle-orm";
 import { db } from "@/db";
-import { linkedinAccounts } from "@/db/schema";
+import { linkedinAccounts, users } from "@/db/schema";
 
 export type Role = "admin" | "member";
 export interface AccessUser {
@@ -38,4 +38,22 @@ export function accountScope(column: Column, ids: string[] | null): SQL | undefi
   if (ids === null) return undefined;
   if (ids.length === 0) return sql`false`;
   return inArray(column, ids);
+}
+
+/**
+ * Owner-based visibility for shared resources (templates, AI prompts):
+ * - Admins see everything (→ `undefined`, no filter).
+ * - Members see items they own, items with no owner (legacy/seeded = shared),
+ *   and any item owned by an admin (admins' items are shared to everyone).
+ */
+export async function ownerVisibilityScope(
+  ownerColumn: Column,
+  user: AccessUser,
+): Promise<SQL | undefined> {
+  if (isAdmin(user)) return undefined;
+  const admins = await db.select({ id: users.id }).from(users).where(eq(users.role, "admin"));
+  const adminIds = admins.map((a) => a.id);
+  const clauses: SQL[] = [isNull(ownerColumn), eq(ownerColumn, user.id)];
+  if (adminIds.length > 0) clauses.push(inArray(ownerColumn, adminIds));
+  return or(...clauses);
 }

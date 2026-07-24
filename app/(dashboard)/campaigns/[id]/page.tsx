@@ -21,7 +21,7 @@ import { db } from "@/db";
 import { campaigns, sequenceSteps, templates, aiPrompts, enrollments, connections, activities } from "@/db/schema";
 import { getIcpMatches } from "@/lib/data-connections";
 import { auth } from "@/auth";
-import { getAccessibleAccountIds } from "@/lib/access";
+import { getAccessibleAccountIds, ownerVisibilityScope } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -40,10 +40,16 @@ export default async function CampaignDetailPage({
   const accessibleIds = await getAccessibleAccountIds(session!.user);
   if (accessibleIds !== null && !accessibleIds.includes(campaign.accountId)) notFound();
 
+  // Only show templates/prompts this user may see (own + shared/admin).
+  const [tScope, pScope] = await Promise.all([
+    ownerVisibilityScope(templates.ownerUserId, session!.user),
+    ownerVisibilityScope(aiPrompts.ownerUserId, session!.user),
+  ]);
+
   const [steps, tpls, prompts, stateCounts, enrolled, drafts] = await Promise.all([
     db.select().from(sequenceSteps).where(eq(sequenceSteps.campaignId, id)).orderBy(asc(sequenceSteps.stepOrder)),
-    db.select().from(templates).orderBy(desc(templates.createdAt)),
-    db.select().from(aiPrompts).orderBy(desc(aiPrompts.createdAt)),
+    db.select().from(templates).where(tScope).orderBy(desc(templates.createdAt)),
+    db.select().from(aiPrompts).where(pScope).orderBy(desc(aiPrompts.createdAt)),
     db
       .select({ state: enrollments.state, n: count() })
       .from(enrollments)

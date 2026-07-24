@@ -82,16 +82,23 @@ export function TemplatesManager({
   prompts,
   templateUsage = {},
   promptUsage = {},
+  currentUserId,
+  isAdmin = false,
 }: {
   templates: Template[];
   prompts: AiPrompt[];
   templateUsage?: Record<string, number>;
   promptUsage?: Record<string, number>;
+  currentUserId?: string;
+  isAdmin?: boolean;
 }) {
+  const canManage = (ownerUserId: string | null) =>
+    isAdmin || (!!ownerUserId && ownerUserId === currentUserId);
+
   return (
     <div className="space-y-8">
-      <TemplatesSection templates={templates} usage={templateUsage} />
-      <PromptsSection prompts={prompts} usage={promptUsage} />
+      <TemplatesSection templates={templates} usage={templateUsage} canManage={canManage} />
+      <PromptsSection prompts={prompts} usage={promptUsage} canManage={canManage} />
     </div>
   );
 }
@@ -101,9 +108,11 @@ export function TemplatesManager({
 function TemplatesSection({
   templates,
   usage,
+  canManage,
 }: {
   templates: Template[];
   usage: Record<string, number>;
+  canManage: (ownerUserId: string | null) => boolean;
 }) {
   const [editing, setEditing] = useState<Template | null>(null);
   const [open, setOpen] = useState(false);
@@ -152,6 +161,7 @@ function TemplatesSection({
             const isInvite = t.type === "invite";
             const placeholders = extractPlaceholders(t.body);
             const used = usage[t.id] ?? 0;
+            const mine = canManage(t.ownerUserId);
             return (
               <Card
                 key={t.id}
@@ -171,24 +181,29 @@ function TemplatesSection({
                     </div>
                     <div className="min-w-0">
                       <CardTitle className="truncate text-sm">{t.name}</CardTitle>
-                      <Badge variant="outline" className="mt-1 capitalize">
-                        {t.type}
-                      </Badge>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <Badge variant="outline" className="capitalize">
+                          {t.type}
+                        </Badge>
+                        {!mine && <Badge variant="secondary">shared</Badge>}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setEditing(t);
-                        setOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <DeleteButton onDelete={() => deleteTemplate(t.id)} />
-                  </div>
+                  {mine && (
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditing(t);
+                          setOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <DeleteButton onDelete={() => deleteTemplate(t.id)} />
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <p className="line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">
@@ -450,9 +465,11 @@ function TemplateDialog({
 function PromptsSection({
   prompts,
   usage,
+  canManage,
 }: {
   prompts: AiPrompt[];
   usage: Record<string, number>;
+  canManage: (ownerUserId: string | null) => boolean;
 }) {
   const [editing, setEditing] = useState<AiPrompt | null>(null);
   const [open, setOpen] = useState(false);
@@ -500,6 +517,7 @@ function PromptsSection({
           {prompts.map((p) => {
             const words = p.systemPrompt.trim() ? p.systemPrompt.trim().split(/\s+/).length : 0;
             const used = usage[p.id] ?? 0;
+            const mine = canManage(p.ownerUserId);
             return (
               <Card
                 key={p.id}
@@ -516,22 +534,25 @@ function PromptsSection({
                       <div className="mt-1 flex flex-wrap gap-1">
                         <Badge variant="outline">{p.model}</Badge>
                         {p.isDefault && <Badge>default</Badge>}
+                        {!mine && <Badge variant="secondary">shared</Badge>}
                       </div>
                     </div>
                   </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setEditing(p);
-                        setOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <DeleteButton onDelete={() => deleteAiPrompt(p.id)} />
-                  </div>
+                  {mine && (
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditing(p);
+                          setOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <DeleteButton onDelete={() => deleteAiPrompt(p.id)} />
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <p className="line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">

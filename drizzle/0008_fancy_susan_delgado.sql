@@ -1,0 +1,2 @@
+ALTER TABLE "ai_prompts" ADD COLUMN "owner_user_id" uuid;--> statement-breakpoint
+ALTER TABLE "ai_prompts" ADD CONSTRAINT "ai_prompts_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;

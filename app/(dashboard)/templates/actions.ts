@@ -14,7 +14,7 @@ import {
 } from "@/lib/ai/generate";
 import { renderTemplate, templateVarsFromConnection } from "@/lib/templates";
 import { getConnections } from "@/lib/data-connections";
-import { getAccessibleAccountIds } from "@/lib/access";
+import { getAccessibleAccountIds, isAdmin } from "@/lib/access";
 import { sendMessage, startChat, getProfile, UnipileError } from "@/lib/unipile/client";
 import { incrementCounter } from "@/lib/rate-limit";
 
@@ -22,6 +22,16 @@ async function requireUser() {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Not authenticated");
   return session.user;
+}
+
+/** Only the owner (or an admin) may edit/delete a shared resource. */
+function assertCanManage(
+  ownerUserId: string | null,
+  user: { id: string; role?: "admin" | "member" },
+) {
+  if (isAdmin(user)) return;
+  if (ownerUserId && ownerUserId === user.id) return;
+  throw new Error("You can only edit items you created.");
 }
 
 /** Fictional prospect used when no real connection is picked for a preview. */
@@ -202,6 +212,9 @@ export async function saveTemplate(input: {
 }): Promise<void> {
   const user = await requireUser();
   if (input.id) {
+    const [existing] = await db.select().from(templates).where(eq(templates.id, input.id)).limit(1);
+    if (!existing) throw new Error("Template not found");
+    assertCanManage(existing.ownerUserId, user);
     await db
       .update(templates)
       .set({ name: input.name, type: input.type, body: input.body })
@@ -218,7 +231,10 @@ export async function saveTemplate(input: {
 }
 
 export async function deleteTemplate(id: string): Promise<void> {
-  await requireUser();
+  const user = await requireUser();
+  const [existing] = await db.select().from(templates).where(eq(templates.id, id)).limit(1);
+  if (!existing) return;
+  assertCanManage(existing.ownerUserId, user);
   await db.delete(templates).where(eq(templates.id, id));
   revalidatePath("/templates");
 }
@@ -256,11 +272,15 @@ export async function saveAiPrompt(input: {
   model: string;
   isDefault: boolean;
 }): Promise<void> {
-  await requireUser();
+  const user = await requireUser();
+  // A "default" is per-owner: only clear the default among this user's own prompts.
   if (input.isDefault) {
-    await db.update(aiPrompts).set({ isDefault: false });
+    await db.update(aiPrompts).set({ isDefault: false }).where(eq(aiPrompts.ownerUserId, user.id));
   }
   if (input.id) {
+    const [existing] = await db.select().from(aiPrompts).where(eq(aiPrompts.id, input.id)).limit(1);
+    if (!existing) throw new Error("Prompt not found");
+    assertCanManage(existing.ownerUserId, user);
     await db
       .update(aiPrompts)
       .set({
@@ -272,6 +292,7 @@ export async function saveAiPrompt(input: {
       .where(eq(aiPrompts.id, input.id));
   } else {
     await db.insert(aiPrompts).values({
+      ownerUserId: user.id,
       name: input.name,
       systemPrompt: input.systemPrompt,
       model: input.model,
@@ -282,7 +303,10 @@ export async function saveAiPrompt(input: {
 }
 
 export async function deleteAiPrompt(id: string): Promise<void> {
-  await requireUser();
+  const user = await requireUser();
+  const [existing] = await db.select().from(aiPrompts).where(eq(aiPrompts.id, id)).limit(1);
+  if (!existing) return;
+  assertCanManage(existing.ownerUserId, user);
   await db.delete(aiPrompts).where(eq(aiPrompts.id, id));
   revalidatePath("/templates");
 }
