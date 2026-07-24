@@ -24,6 +24,13 @@ export async function POST(req: Request) {
   const job = await readJob<{ campaignId?: string }>(req);
   if (!job.ok) return NextResponse.json({ error: "unauthorized" }, { status: job.status });
 
+  // Auto-enroll campaigns are evergreen — revive any that had auto-completed
+  // before this became the rule, so they keep absorbing new connections.
+  await db
+    .update(campaigns)
+    .set({ status: "active" })
+    .where(and(eq(campaigns.status, "completed"), eq(campaigns.autoEnroll, true)));
+
   const where = job.body.campaignId
     ? and(eq(campaigns.status, "active"), eq(campaigns.autoEnroll, true), eq(campaigns.id, job.body.campaignId))
     : and(eq(campaigns.status, "active"), eq(campaigns.autoEnroll, true));

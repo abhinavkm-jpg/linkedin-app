@@ -205,6 +205,13 @@ export function CampaignHeader({
             Campaign is active — pause it to edit the sequence. You can still enroll and review.
           </p>
         )}
+        {autoEnroll && (
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium">Evergreen</span> — with auto-enroll on, this campaign stays
+            active and keeps enrolling new matching connections (it won&apos;t auto-complete). Turn
+            auto-enroll off to let it finish.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

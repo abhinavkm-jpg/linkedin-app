@@ -121,7 +121,9 @@ export async function POST(req: Request) {
 
   // Auto-complete active campaigns that have enrollments but nothing left to do.
   // `awaiting_accept` (pending invite) and `paused` (awaiting review) still count
-  // as pending, so those campaigns stay active.
+  // as pending, so those campaigns stay active. Auto-enroll campaigns are
+  // "evergreen" — they never auto-complete; they stay active to keep absorbing
+  // new matching connections over time.
   const PENDING = [
     "queued",
     "accepted",
@@ -136,6 +138,7 @@ export async function POST(req: Request) {
     .where(
       and(
         eq(campaigns.status, "active"),
+        eq(campaigns.autoEnroll, false),
         exists(
           db
             .select({ x: sql`1` })
