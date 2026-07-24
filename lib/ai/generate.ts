@@ -67,13 +67,10 @@ function buildProspectBlock(p: ProspectContext): string {
  * Baseline formatting applied to every generated message (appended to whatever
  * system prompt is in use) so output is readable, not a single dense paragraph.
  */
-const FORMATTING_RULES = `FORMATTING (always follow, in addition to the rules above):
-- Write a real, well-formatted LinkedIn message — never one long block of text.
-- Start with a greeting line addressing them by first name (e.g. "Hi {{first_name}},"), then a blank line.
-- Body: 1-3 short paragraphs, each 1-2 sentences, separated by a blank line.
-- End with a brief sign-off on its own line (e.g. "Best," then your first name, or "Thanks").
-- Use real line breaks (newlines) between the greeting, paragraphs, and sign-off so the spacing is preserved.
-- Exception: a connection-request note (max 300 characters) should be 2-3 concise lines without blank-line spacing.`;
+const FORMATTING_RULES = `FORMATTING:
+- Write naturally, like a normal LinkedIn message. Do NOT impose a rigid structure — no mandatory greeting line, no bullet points, no sign-off block.
+- Keep it as plain text. If the message is short, leave it as a single paragraph.
+- Only when the message is long, break it into at most two short paragraphs separated by a single blank line so it's readable. That's it.`;
 
 export interface GenerateOptions {
   step: OutreachStep;
