@@ -63,6 +63,14 @@ export const BANNED_WORDS = [
   "dynamic",
   "stay ahead",
   "competitive",
+  "world",
+  "discover",
+  "whether",
+  "whether you're",
+  "both style",
+  "blend",
+  "stark",
+  "contrast",
 ] as const;
 
 export function findBannedWords(text: string): string[] {

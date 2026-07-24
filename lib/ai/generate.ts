@@ -1,5 +1,8 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { aiPrompts } from "@/db/schema";
 import { DEFAULT_AI_MODEL } from "@/lib/env";
 import { getSettings } from "@/lib/settings";
 import { DEFAULT_SYSTEM_PROMPT, findBannedWords } from "./prompts";
@@ -10,6 +13,25 @@ async function client(): Promise<Anthropic> {
     throw new Error("Anthropic is not configured. Add your API key in Settings.");
   }
   return new Anthropic({ apiKey: anthropicApiKey });
+}
+
+/**
+ * The voice/rules used when a step doesn't name a specific prompt: the DB prompt
+ * flagged `isDefault`, else the built-in constant. This makes the "default"
+ * prompt in the UI actually drive generation.
+ */
+export async function getDefaultSystemPrompt(): Promise<string> {
+  try {
+    const [row] = await db
+      .select({ systemPrompt: aiPrompts.systemPrompt })
+      .from(aiPrompts)
+      .where(eq(aiPrompts.isDefault, true))
+      .limit(1);
+    if (row?.systemPrompt?.trim()) return row.systemPrompt;
+  } catch {
+    // fall through to the constant
+  }
+  return DEFAULT_SYSTEM_PROMPT;
 }
 
 export type OutreachStep =
@@ -96,10 +118,10 @@ export interface GeneratedMessage {
  */
 export async function generateMessage(opts: GenerateOptions): Promise<GeneratedMessage> {
   const model = opts.model || DEFAULT_AI_MODEL;
-  // Always apply a baseline formatting standard on top of the user's prompt so
-  // messages read like real LinkedIn DMs (greeting, short paragraphs, sign-off)
-  // rather than one dense block.
-  const system = `${opts.systemPrompt || DEFAULT_SYSTEM_PROMPT}\n\n${FORMATTING_RULES}`;
+  // No explicit prompt → use the editable DB default (falls back to the constant).
+  const base = opts.systemPrompt || (await getDefaultSystemPrompt());
+  // Always apply a light formatting baseline on top so messages read naturally.
+  const system = `${base}\n\n${FORMATTING_RULES}`;
 
   const parts: string[] = [
     STEP_INSTRUCTIONS[opts.step],
@@ -118,6 +140,7 @@ export async function generateMessage(opts: GenerateOptions): Promise<GeneratedM
   }
   parts.push(
     "",
+    "Assume this prospect is already a valid, in-ICP target. Always write the message itself — never ask for inputs, never flag or refuse, never explain your reasoning.",
     "Return only the message text with no preamble, quotes, or surrounding commentary.",
   );
 
