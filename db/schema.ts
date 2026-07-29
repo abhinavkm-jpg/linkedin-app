@@ -143,6 +143,13 @@ export const linkedinAccounts = pgTable(
     // send-time enrichment cap). Off by default; enrich this many per day.
     autoEnrich: boolean("auto_enrich").notNull().default(false),
     autoEnrichDailyCap: integer("auto_enrich_daily_cap").notNull().default(150),
+    // Content library: sitemap to crawl + which URL sections are shareable in
+    // content-sharing follow-ups (e.g. {"blog"}).
+    sitemapUrl: text("sitemap_url"),
+    contentSections: text("content_sections")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
     // Connection sync state.
     syncStatus: syncStatusEnum("sync_status").notNull().default("idle"),
     syncCursor: text("sync_cursor"),
@@ -153,6 +160,47 @@ export const linkedinAccounts = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("linkedin_accounts_owner_idx").on(t.ownerUserId)],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Content library (per account) — crawled from the account's sitemap          */
+/* -------------------------------------------------------------------------- */
+
+export const contentAssets = pgTable(
+  "content_assets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => linkedinAccounts.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    title: text("title"),
+    section: text("section"), // first path segment, e.g. "blog", "marketing-glossary"
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("content_assets_account_url_idx").on(t.accountId, t.url),
+    index("content_assets_account_idx").on(t.accountId),
+  ],
+);
+
+/* -------------------------------------------------------------------------- */
+/* Per-account outreach prompt set (voice + content-sharing, by stage)          */
+/* -------------------------------------------------------------------------- */
+
+export const accountPromptSets = pgTable(
+  "account_prompt_sets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => linkedinAccounts.id, { onDelete: "cascade" }),
+    // connection_request | welcome | follow_up_1 | follow_up_2 | follow_up_3
+    stage: text("stage").notNull(),
+    aiPromptId: uuid("ai_prompt_id").references(() => aiPrompts.id, { onDelete: "set null" }),
+    shareContent: boolean("share_content").notNull().default(false),
+  },
+  (t) => [uniqueIndex("account_prompt_sets_account_stage_idx").on(t.accountId, t.stage)],
 );
 
 /* -------------------------------------------------------------------------- */

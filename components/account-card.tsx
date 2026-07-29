@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { QuotaGauge } from "@/components/quota-gauge";
+import { ContentLibraryDialog } from "@/components/content-library-dialog";
 import { accountStatusTone } from "@/lib/status";
 import { startSync, assignAccountOwner, setAccountAutoEnrich } from "@/app/(dashboard)/accounts/actions";
 import type { AccountWithStats } from "@/lib/data";
@@ -125,7 +126,7 @@ export function AccountCard({
         )}
 
         {isAdmin && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -139,6 +140,12 @@ export function AccountCard({
               )}
               {account.syncStatus === "running" ? "Syncing…" : "Sync connections"}
             </Button>
+            <ContentLibraryDialog
+              accountId={account.id}
+              accountName={account.name}
+              sitemapUrl={account.sitemapUrl}
+              contentSections={account.contentSections}
+            />
           </div>
         )}
       </CardContent>
