@@ -1,0 +1,1 @@
+ALTER TABLE "linkedin_accounts" ADD COLUMN "default_prompt" text;

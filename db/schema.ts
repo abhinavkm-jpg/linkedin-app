@@ -143,6 +143,10 @@ export const linkedinAccounts = pgTable(
     // send-time enrichment cap). Off by default; enrich this many per day.
     autoEnrich: boolean("auto_enrich").notNull().default(false),
     autoEnrichDailyCap: integer("auto_enrich_daily_cap").notNull().default(150),
+    // This account's own default DM system prompt. Used as the base voice for
+    // every DM unless a step or per-stage box overrides it; falls back to the
+    // workspace default when empty.
+    defaultPrompt: text("default_prompt"),
     // Content library: sitemap to crawl + which URL sections are shareable in
     // content-sharing follow-ups (e.g. {"blog"}).
     sitemapUrl: text("sitemap_url"),

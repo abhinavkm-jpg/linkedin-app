@@ -349,6 +349,17 @@ export async function getDefaultPrompt(): Promise<string> {
   return row?.systemPrompt ?? "";
 }
 
+/** Set this account's own default DM system prompt (the base voice for its DMs). Admin only. */
+export async function setAccountDefaultPrompt(accountId: string, text: string): Promise<void> {
+  await requireAdmin();
+  await db
+    .update(linkedinAccounts)
+    .set({ defaultPrompt: text.trim() || null })
+    .where(eq(linkedinAccounts.id, accountId));
+  revalidatePath("/accounts");
+  revalidatePath(`/accounts/${accountId}`);
+}
+
 /** Update (or create) the workspace default DM system prompt. Admin only. */
 export async function updateDefaultPrompt(text: string): Promise<void> {
   const user = await requireAdmin();

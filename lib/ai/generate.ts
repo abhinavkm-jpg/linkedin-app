@@ -94,6 +94,31 @@ const FORMATTING_RULES = `FORMATTING:
 - Keep it as plain text. If the message is short, leave it as a single paragraph.
 - Only when the message is long, break it into at most two short paragraphs separated by a single blank line so it's readable. That's it.`;
 
+const URL_RE = /https?:\/\/[^\s)>\]]+/gi;
+
+/** Normalize a URL for comparison (drop trailing punctuation/slash, lowercase host+path). */
+function normalizeUrl(u: string): string {
+  return u.trim().replace(/[.,;:!?)"']+$/, "").replace(/\/+$/, "").toLowerCase();
+}
+
+/**
+ * Remove any URL from generated text that wasn't among the ones we explicitly
+ * supplied (via `instructions`). Legitimate links only ever come from the
+ * injected content instruction, so an unsupplied/altered link is a
+ * hallucination — strip it and tidy the surrounding whitespace.
+ */
+function stripDisallowedUrls(text: string, allowed: Set<string>): string {
+  let out = text.replace(URL_RE, (m) => (allowed.has(normalizeUrl(m)) ? m : ""));
+  // Tidy artifacts left by a removed link: doubled spaces, space-before-punct,
+  // empty parentheses, dangling "at/here:" leads, and blank lines.
+  out = out
+    .replace(/\(\s*\)/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+([.,;:!?])/g, "$1")
+    .replace(/\n{3,}/g, "\n\n");
+  return out.trim();
+}
+
 export interface GenerateOptions {
   step: OutreachStep;
   prospect: ProspectContext;
@@ -141,6 +166,7 @@ export async function generateMessage(opts: GenerateOptions): Promise<GeneratedM
   parts.push(
     "",
     "Assume this prospect is already a valid, in-ICP target. Always write the message itself — never ask for inputs, never flag or refuse, never explain your reasoning.",
+    "Do not include any URL or link unless one is provided in the guidance above. Never invent, guess, shorten, or reconstruct a URL.",
     "Return only the message text with no preamble, quotes, or surrounding commentary.",
   );
 
@@ -153,11 +179,17 @@ export async function generateMessage(opts: GenerateOptions): Promise<GeneratedM
     messages: [{ role: "user", content: parts.join("\n") }],
   });
 
-  const text = response.content
+  const raw = response.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("")
     .trim();
+
+  // Only URLs we explicitly supplied via instructions are allowed to survive.
+  const allowed = new Set(
+    (opts.instructions?.match(URL_RE) ?? []).map(normalizeUrl),
+  );
+  const text = stripDisallowedUrls(raw, allowed);
 
   return {
     text,

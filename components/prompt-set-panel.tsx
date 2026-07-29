@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { saveAccountPromptSet, updateDefaultPrompt } from "@/app/(dashboard)/accounts/actions";
+import { saveAccountPromptSet, setAccountDefaultPrompt } from "@/app/(dashboard)/accounts/actions";
 
 const STAGES: { stage: string; label: string; hint: string; content: boolean }[] = [
   { stage: "connection_request", label: "Connection request", hint: "The invite note when first connecting.", content: false },
@@ -55,7 +55,7 @@ export function PromptSetPanel({
 
   function saveDefault() {
     setSavingDef(true);
-    updateDefaultPrompt(defText)
+    setAccountDefaultPrompt(accountId, defText)
       .then(() => {
         toast.success("Default DM prompt saved");
         router.refresh();
@@ -93,10 +93,10 @@ export function PromptSetPanel({
             <Sparkles className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <CardTitle className="text-base">Default DM prompt</CardTitle>
+            <CardTitle className="text-base">Default DM prompt · {accountName}</CardTitle>
             <p className="text-xs text-muted-foreground">
-              The voice &amp; rules used to write every DM. Editing this changes all stages that
-              don&apos;t have their own text below.
+              This account&apos;s own voice &amp; rules for every DM. Editing this affects only{" "}
+              {accountName} and drives all stages that don&apos;t have their own text below.
             </p>
           </div>
         </CardHeader>

@@ -352,6 +352,17 @@ export async function resolveStepText(
       model = model ?? p?.model ?? undefined;
     }
 
+    // Nothing more specific → this account's own default DM prompt (if set).
+    // When still undefined, generateMessage falls back to the workspace default.
+    if (!systemPrompt) {
+      const [acct] = await db
+        .select({ defaultPrompt: linkedinAccounts.defaultPrompt })
+        .from(linkedinAccounts)
+        .where(eq(linkedinAccounts.id, camp.accountId))
+        .limit(1);
+      if (acct?.defaultPrompt?.trim()) systemPrompt = acct.defaultPrompt;
+    }
+
     const prospect: ProspectContext = {
       firstName: conn.firstName,
       lastName: conn.lastName,

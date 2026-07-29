@@ -161,7 +161,7 @@ export default async function AccountSettingsPage({
           <PromptSetPanel
             accountId={account.id}
             accountName={account.name}
-            defaultPrompt={defaultPrompt}
+            defaultPrompt={account.defaultPrompt || defaultPrompt}
             initial={promptSet}
           />
         </Section>
