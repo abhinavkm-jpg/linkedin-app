@@ -338,9 +338,16 @@ export async function resolveStepText(
       .where(and(eq(accountPromptSets.accountId, camp.accountId), eq(accountPromptSets.stage, stage)))
       .limit(1);
 
-    const promptId = step.aiPromptId ?? setRow?.aiPromptId ?? null;
-    if (promptId) {
-      const [p] = await db.select().from(aiPrompts).where(eq(aiPrompts.id, promptId)).limit(1);
+    // Precedence: an explicit per-step prompt → the account-stage's edited text
+    // → a linked prompt for the stage → (undefined ⇒ workspace default in generate).
+    if (step.aiPromptId) {
+      const [p] = await db.select().from(aiPrompts).where(eq(aiPrompts.id, step.aiPromptId)).limit(1);
+      systemPrompt = p?.systemPrompt;
+      model = model ?? p?.model ?? undefined;
+    } else if (setRow?.promptText?.trim()) {
+      systemPrompt = setRow.promptText;
+    } else if (setRow?.aiPromptId) {
+      const [p] = await db.select().from(aiPrompts).where(eq(aiPrompts.id, setRow.aiPromptId)).limit(1);
       systemPrompt = p?.systemPrompt;
       model = model ?? p?.model ?? undefined;
     }

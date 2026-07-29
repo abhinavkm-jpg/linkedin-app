@@ -1,20 +1,44 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { desc, count, isNotNull, eq } from "drizzle-orm";
+import { desc, count, eq } from "drizzle-orm";
 import { ChevronLeft, Users, MessageSquare, Sparkles, FileText } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AccountCard } from "@/components/account-card";
 import { CapsEditor } from "@/components/caps-editor";
-import { TemplatesManager } from "@/components/templates-manager";
+import { PromptSetPanel } from "@/components/prompt-set-panel";
+import { ContentLibraryPanel } from "@/components/content-library-panel";
 import { db } from "@/db";
-import { users, aiPrompts, sequenceSteps, contentAssets } from "@/db/schema";
+import { users, contentAssets, accountPromptSets } from "@/db/schema";
 import { getAccountsWithStats } from "@/lib/data";
+import { getDefaultPrompt } from "@/app/(dashboard)/accounts/actions";
 import { auth } from "@/auth";
-import { isAdmin, ownerVisibilityScope } from "@/lib/access";
+import { isAdmin } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
+
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h2>
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export default async function AccountSettingsPage({
   params,
@@ -30,32 +54,62 @@ export default async function AccountSettingsPage({
   const account = accounts.find((a) => a.id === id);
   if (!account) notFound();
 
-  const pScope = await ownerVisibilityScope(aiPrompts.ownerUserId, user);
-  const [members, prompts, promptUse, [{ assetCount }]] = await Promise.all([
+  const [members, defaultPrompt, promptSet, sectionRows, assets] = await Promise.all([
     db.select({ id: users.id, name: users.name, email: users.email }).from(users),
-    db.select().from(aiPrompts).where(pScope).orderBy(desc(aiPrompts.createdAt)),
+    getDefaultPrompt(),
     db
-      .select({ id: sequenceSteps.aiPromptId, n: count() })
-      .from(sequenceSteps)
-      .where(isNotNull(sequenceSteps.aiPromptId))
-      .groupBy(sequenceSteps.aiPromptId),
+      .select({
+        stage: accountPromptSets.stage,
+        promptText: accountPromptSets.promptText,
+        shareContent: accountPromptSets.shareContent,
+      })
+      .from(accountPromptSets)
+      .where(eq(accountPromptSets.accountId, id)),
     db
-      .select({ assetCount: count() })
+      .select({ section: contentAssets.section, n: count() })
       .from(contentAssets)
-      .where(eq(contentAssets.accountId, id)),
+      .where(eq(contentAssets.accountId, id))
+      .groupBy(contentAssets.section),
+    db
+      .select({ title: contentAssets.title, url: contentAssets.url, section: contentAssets.section })
+      .from(contentAssets)
+      .where(eq(contentAssets.accountId, id))
+      .orderBy(desc(contentAssets.createdAt))
+      .limit(12),
   ]);
-  const promptUsage = Object.fromEntries(promptUse.map((r) => [r.id as string, Number(r.n)]));
+
+  const sections = sectionRows
+    .map((s) => ({ section: s.section ?? "", n: Number(s.n) }))
+    .filter((s) => s.section)
+    .sort((a, b) => b.n - a.n);
+  const assetPreview = assets.map((a) => ({
+    title: a.title ?? "",
+    url: a.url,
+    section: a.section ?? "",
+  }));
+  const assetCount = sections.reduce((sum, s) => sum + s.n, 0);
 
   const stats = [
     { icon: Users, label: "Connections synced", value: account.connectionCount },
-    { icon: FileText, label: "Content assets", value: Number(assetCount) },
-    { icon: MessageSquare, label: "Sent today", value: account.quotas.message.used + account.quotas.invite.used },
-    { icon: Sparkles, label: "Enriched today", value: account.quotas.autoEnrich.used + account.quotas.enrich.used },
+    { icon: FileText, label: "Content assets", value: assetCount },
+    {
+      icon: MessageSquare,
+      label: "Sent today",
+      value: account.quotas.message.used + account.quotas.invite.used,
+    },
+    {
+      icon: Sparkles,
+      label: "Enriched today",
+      value: account.quotas.autoEnrich.used + account.quotas.enrich.used,
+    },
   ];
 
   return (
     <>
-      <PageHeader title={`${account.name} — settings`} description="Limits, content library, prompt set, and prompts for this account.">
+      <PageHeader
+        title={`${account.name} — settings`}
+        description="Everything for this account: limits, DM prompts, and the content library."
+      >
         <Button render={<Link href="/accounts" />} size="sm" variant="outline">
           <ChevronLeft className="h-4 w-4" /> Accounts
         </Button>
@@ -79,19 +133,11 @@ export default async function AccountSettingsPage({
           ))}
         </div>
 
-        {/* Overview & per-account controls (owner, sync, auto-enrich, content library, prompt set) */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Account &amp; automation
-          </h2>
+        <Section title="Account & automation" description="Owner, connection sync, and daily auto-enrichment.">
           <AccountCard account={account} isAdmin members={members} settingsLink={false} />
-        </section>
+        </Section>
 
-        {/* Daily limits */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Daily limits
-          </h2>
+        <Section title="Daily limits" description="Caps that protect the account from over-sending.">
           <Card>
             <CardContent className="py-4">
               <CapsEditor
@@ -106,26 +152,32 @@ export default async function AccountSettingsPage({
               />
             </CardContent>
           </Card>
-        </section>
+        </Section>
 
-        {/* Prompts — view & edit (including the default) */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            AI prompts — view &amp; edit
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            These prompts (including the default) power the voices you assign per stage in the
-            account&apos;s prompt set above.
-          </p>
-          <TemplatesManager
-            promptsOnly
-            templates={[]}
-            prompts={prompts}
-            promptUsage={promptUsage}
-            currentUserId={user.id}
-            isAdmin
+        <Section
+          title="DM prompts"
+          description="View and edit the default prompt that writes every DM, and give any stage its own voice."
+        >
+          <PromptSetPanel
+            accountId={account.id}
+            accountName={account.name}
+            defaultPrompt={defaultPrompt}
+            initial={promptSet}
           />
-        </section>
+        </Section>
+
+        <Section
+          title="Content library"
+          description="Sync articles from this account's sitemap and choose which sections the AI may share in follow-ups."
+        >
+          <ContentLibraryPanel
+            accountId={account.id}
+            sitemapUrl={account.sitemapUrl}
+            contentSections={account.contentSections}
+            sections={sections}
+            assets={assetPreview}
+          />
+        </Section>
       </div>
     </>
   );

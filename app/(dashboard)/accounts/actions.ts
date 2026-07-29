@@ -300,12 +300,12 @@ export async function getContentSections(
 
 export async function getAccountPromptSet(
   accountId: string,
-): Promise<{ stage: string; aiPromptId: string | null; shareContent: boolean }[]> {
+): Promise<{ stage: string; promptText: string | null; shareContent: boolean }[]> {
   await requireAdmin();
   const rows = await db
     .select({
       stage: accountPromptSets.stage,
-      aiPromptId: accountPromptSets.aiPromptId,
+      promptText: accountPromptSets.promptText,
       shareContent: accountPromptSets.shareContent,
     })
     .from(accountPromptSets)
@@ -313,34 +313,76 @@ export async function getAccountPromptSet(
   return rows;
 }
 
-/** All AI prompts (id + name) for the per-account prompt-set picker. Admin only. */
-export async function listAiPromptsForPicker(): Promise<{ id: string; name: string }[]> {
-  await requireAdmin();
-  return db
-    .select({ id: aiPrompts.id, name: aiPrompts.name })
-    .from(aiPrompts)
-    .orderBy(desc(aiPrompts.createdAt));
-}
-
 export async function saveAccountPromptSet(
   accountId: string,
-  entries: { stage: string; aiPromptId: string | null; shareContent: boolean }[],
+  entries: { stage: string; promptText: string | null; shareContent: boolean }[],
 ): Promise<void> {
   await requireAdmin();
   for (const e of entries) {
     if (!CONTENT_STAGES.includes(e.stage as (typeof CONTENT_STAGES)[number])) continue;
+    const promptText = e.promptText?.trim() ? e.promptText.trim() : null;
     await db
       .insert(accountPromptSets)
       .values({
         accountId,
         stage: e.stage,
-        aiPromptId: e.aiPromptId,
+        promptText,
         shareContent: e.shareContent,
       })
       .onConflictDoUpdate({
         target: [accountPromptSets.accountId, accountPromptSets.stage],
-        set: { aiPromptId: e.aiPromptId, shareContent: e.shareContent },
+        set: { promptText, shareContent: e.shareContent },
       });
   }
   revalidatePath("/accounts");
+  revalidatePath(`/accounts/${accountId}`);
+}
+
+/** The workspace default DM system prompt (the one that drives generation when a stage has no custom text). */
+export async function getDefaultPrompt(): Promise<string> {
+  await requireAdmin();
+  const [row] = await db
+    .select({ systemPrompt: aiPrompts.systemPrompt })
+    .from(aiPrompts)
+    .where(eq(aiPrompts.isDefault, true))
+    .limit(1);
+  return row?.systemPrompt ?? "";
+}
+
+/** Update (or create) the workspace default DM system prompt. Admin only. */
+export async function updateDefaultPrompt(text: string): Promise<void> {
+  const user = await requireAdmin();
+  const body = text.trim();
+  const [existing] = await db
+    .select()
+    .from(aiPrompts)
+    .where(eq(aiPrompts.isDefault, true))
+    .limit(1);
+  if (existing) {
+    await db.update(aiPrompts).set({ systemPrompt: body }).where(eq(aiPrompts.id, existing.id));
+  } else {
+    await db.insert(aiPrompts).values({
+      ownerUserId: user.id,
+      name: "Default DM prompt",
+      systemPrompt: body,
+      isDefault: true,
+    });
+  }
+  revalidatePath("/accounts");
+  revalidatePath("/templates");
+}
+
+/** A preview of imported articles for the content-library panel. Admin only. */
+export async function listContentAssets(
+  accountId: string,
+  limit = 12,
+): Promise<{ title: string; url: string; section: string }[]> {
+  await requireAdmin();
+  const rows = await db
+    .select({ title: contentAssets.title, url: contentAssets.url, section: contentAssets.section })
+    .from(contentAssets)
+    .where(eq(contentAssets.accountId, accountId))
+    .orderBy(desc(contentAssets.createdAt))
+    .limit(limit);
+  return rows.map((r) => ({ title: r.title ?? "", url: r.url, section: r.section ?? "" }));
 }

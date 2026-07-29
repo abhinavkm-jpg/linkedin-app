@@ -11,8 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { QuotaGauge } from "@/components/quota-gauge";
-import { ContentLibraryDialog } from "@/components/content-library-dialog";
-import { PromptSetDialog } from "@/components/prompt-set-dialog";
 import { accountStatusTone } from "@/lib/status";
 import { startSync, assignAccountOwner, setAccountAutoEnrich } from "@/app/(dashboard)/accounts/actions";
 import type { AccountWithStats } from "@/lib/data";
@@ -82,18 +80,7 @@ export function AccountCard({
               : " · never synced"}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <Badge variant={accountStatusTone(account.status)}>{account.status}</Badge>
-          {settingsLink && isAdmin && (
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              render={<Link href={`/accounts/${account.id}`} aria-label="Account settings" />}
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
+        <Badge variant={accountStatusTone(account.status)}>{account.status}</Badge>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-3">
@@ -158,13 +145,15 @@ export function AccountCard({
               )}
               {account.syncStatus === "running" ? "Syncing…" : "Sync connections"}
             </Button>
-            <ContentLibraryDialog
-              accountId={account.id}
-              accountName={account.name}
-              sitemapUrl={account.sitemapUrl}
-              contentSections={account.contentSections}
-            />
-            <PromptSetDialog accountId={account.id} accountName={account.name} />
+            {settingsLink && (
+              <Button
+                variant="outline"
+                size="sm"
+                render={<Link href={`/accounts/${account.id}`} />}
+              >
+                <Settings className="h-4 w-4" /> Content &amp; prompts
+              </Button>
+            )}
           </div>
         )}
       </CardContent>

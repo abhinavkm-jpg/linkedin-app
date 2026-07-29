@@ -198,6 +198,9 @@ export const accountPromptSets = pgTable(
     // connection_request | welcome | follow_up_1 | follow_up_2 | follow_up_3
     stage: text("stage").notNull(),
     aiPromptId: uuid("ai_prompt_id").references(() => aiPrompts.id, { onDelete: "set null" }),
+    // Admin-edited system prompt for this stage. When set, it drives generation
+    // for the stage (highest precedence after an explicit per-step prompt).
+    promptText: text("prompt_text"),
     shareContent: boolean("share_content").notNull().default(false),
   },
   (t) => [uniqueIndex("account_prompt_sets_account_stage_idx").on(t.accountId, t.stage)],

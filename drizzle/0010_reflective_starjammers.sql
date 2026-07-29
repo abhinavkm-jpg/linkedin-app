@@ -1,0 +1,1 @@
+ALTER TABLE "account_prompt_sets" ADD COLUMN "prompt_text" text;
