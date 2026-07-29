@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   enrollments,
@@ -9,6 +9,7 @@ import {
   linkedinAccounts,
   templates,
   aiPrompts,
+  accountPromptSets,
   activities,
   chats,
   type SequenceStep,
@@ -22,6 +23,7 @@ import { renderTemplate, templateVarsFromConnection } from "@/lib/templates";
 import { generateMessage, type OutreachStep, type ProspectContext } from "@/lib/ai/generate";
 import { connectionMatchesIcp, hasIcp } from "@/lib/icp";
 import { enrichConnectionRow } from "@/lib/outreach/enrich";
+import { pickRelevantAssets, contentInstruction } from "@/lib/outreach/content";
 
 export type Enrollment = typeof enrollments.$inferSelect;
 
@@ -324,13 +326,25 @@ export async function resolveStepText(
   }
 
   if (step.sourceType === "ai") {
+    const stage = aiStepLabel(step, steps);
     let systemPrompt: string | undefined;
     let model = step.model ?? undefined;
-    if (step.aiPromptId) {
-      const [p] = await db.select().from(aiPrompts).where(eq(aiPrompts.id, step.aiPromptId)).limit(1);
+
+    // Per-account prompt set: provides the stage's voice + whether it shares an
+    // article. An explicit step prompt still wins over the account default.
+    const [setRow] = await db
+      .select()
+      .from(accountPromptSets)
+      .where(and(eq(accountPromptSets.accountId, camp.accountId), eq(accountPromptSets.stage, stage)))
+      .limit(1);
+
+    const promptId = step.aiPromptId ?? setRow?.aiPromptId ?? null;
+    if (promptId) {
+      const [p] = await db.select().from(aiPrompts).where(eq(aiPrompts.id, promptId)).limit(1);
       systemPrompt = p?.systemPrompt;
-      model = model ?? p?.model;
+      model = model ?? p?.model ?? undefined;
     }
+
     const prospect: ProspectContext = {
       firstName: conn.firstName,
       lastName: conn.lastName,
@@ -341,7 +355,15 @@ export async function resolveStepText(
       summary: conn.enrichment?.summary ?? null,
       experience: conn.enrichment?.workExperience ?? [],
     };
-    const res = await generateMessage({ step: aiStepLabel(step, steps), prospect, systemPrompt, model });
+
+    // Content-sharing stage → hand the model real article options to reference.
+    let instructions: string | undefined;
+    if (setRow?.shareContent) {
+      const assets = await pickRelevantAssets(camp.accountId, prospect, 5);
+      if (assets.length > 0) instructions = contentInstruction(assets);
+    }
+
+    const res = await generateMessage({ step: stage, prospect, systemPrompt, model, instructions });
     return res.text;
   }
 

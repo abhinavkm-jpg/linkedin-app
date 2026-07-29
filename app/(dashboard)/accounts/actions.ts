@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { eq, count, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { linkedinAccounts, contentAssets, accountPromptSets } from "@/db/schema";
+import { linkedinAccounts, contentAssets, accountPromptSets, aiPrompts } from "@/db/schema";
+import { desc } from "drizzle-orm";
 import { env } from "@/lib/env";
 import { createHostedAuthLink, listAccounts, UnipileError } from "@/lib/unipile/client";
 import { enqueueJob } from "@/lib/qstash";
@@ -310,6 +311,15 @@ export async function getAccountPromptSet(
     .from(accountPromptSets)
     .where(eq(accountPromptSets.accountId, accountId));
   return rows;
+}
+
+/** All AI prompts (id + name) for the per-account prompt-set picker. Admin only. */
+export async function listAiPromptsForPicker(): Promise<{ id: string; name: string }[]> {
+  await requireAdmin();
+  return db
+    .select({ id: aiPrompts.id, name: aiPrompts.name })
+    .from(aiPrompts)
+    .orderBy(desc(aiPrompts.createdAt));
 }
 
 export async function saveAccountPromptSet(

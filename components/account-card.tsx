@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { QuotaGauge } from "@/components/quota-gauge";
 import { ContentLibraryDialog } from "@/components/content-library-dialog";
+import { PromptSetDialog } from "@/components/prompt-set-dialog";
 import { accountStatusTone } from "@/lib/status";
 import { startSync, assignAccountOwner, setAccountAutoEnrich } from "@/app/(dashboard)/accounts/actions";
 import type { AccountWithStats } from "@/lib/data";
@@ -146,6 +147,7 @@ export function AccountCard({
               sitemapUrl={account.sitemapUrl}
               contentSections={account.contentSections}
             />
+            <PromptSetDialog accountId={account.id} accountName={account.name} />
           </div>
         )}
       </CardContent>
