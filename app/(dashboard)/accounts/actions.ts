@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, count, sql } from "drizzle-orm";
+import { and, eq, count, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { linkedinAccounts, contentAssets, accountPromptSets, aiPrompts } from "@/db/schema";
@@ -283,6 +283,60 @@ export async function getContentSections(
   accountId: string,
 ): Promise<{ section: string; n: number }[]> {
   await requireAdmin();
+  const rows = await db
+    .select({ section: contentAssets.section, n: count() })
+    .from(contentAssets)
+    .where(eq(contentAssets.accountId, accountId))
+    .groupBy(contentAssets.section);
+  return rows
+    .map((s) => ({ section: s.section ?? "", n: Number(s.n) }))
+    .filter((s) => s.section)
+    .sort((a, b) => b.n - a.n);
+}
+
+/**
+ * Add content URLs manually (pasted list or extracted from an uploaded CSV/TXT).
+ * Derives section + title the same way the sitemap import does; idempotent.
+ */
+export async function addContentUrls(
+  accountId: string,
+  urls: string[],
+): Promise<{ imported: number; sections: { section: string; n: number }[]; error?: string }> {
+  await requireAdmin();
+  const clean = [...new Set(urls.map((u) => u.trim()).filter((u) => /^https?:\/\//i.test(u)))];
+  const values = clean
+    .map((u) => ({ accountId, url: u, section: sectionFromUrl(u), title: titleFromUrl(u) }))
+    .filter((v) => v.section); // skip the bare homepage
+  if (values.length === 0) {
+    return { imported: 0, sections: await getContentSectionsRaw(accountId), error: "No valid http(s) URLs with a path were found." };
+  }
+  for (let i = 0; i < values.length; i += 500) {
+    const chunk = values.slice(i, i + 500);
+    await db
+      .insert(contentAssets)
+      .values(chunk)
+      .onConflictDoUpdate({
+        target: [contentAssets.accountId, contentAssets.url],
+        set: { title: sql`excluded.title`, section: sql`excluded.section` },
+      });
+  }
+  revalidatePath(`/accounts/${accountId}`);
+  return { imported: values.length, sections: await getContentSectionsRaw(accountId) };
+}
+
+/** Remove a single content asset from an account's library. Admin only. */
+export async function deleteContentAsset(accountId: string, url: string): Promise<void> {
+  await requireAdmin();
+  await db
+    .delete(contentAssets)
+    .where(and(eq(contentAssets.accountId, accountId), eq(contentAssets.url, url)));
+  revalidatePath(`/accounts/${accountId}`);
+}
+
+/** Section counts without the requireAdmin gate — for internal reuse. */
+async function getContentSectionsRaw(
+  accountId: string,
+): Promise<{ section: string; n: number }[]> {
   const rows = await db
     .select({ section: contentAssets.section, n: count() })
     .from(contentAssets)

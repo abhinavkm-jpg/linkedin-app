@@ -3,22 +3,25 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Save, Sparkles, MessageSquare } from "lucide-react";
+import { Loader2, Save, Sparkles, Play, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { saveAccountPromptSet, setAccountDefaultPrompt } from "@/app/(dashboard)/accounts/actions";
+import { Card, CardContent } from "@/components/ui/card";
+import { saveAccountPromptSet } from "@/app/(dashboard)/accounts/actions";
+import { previewAiMessage } from "@/app/(dashboard)/templates/actions";
+import type { OutreachStep } from "@/lib/ai/generate";
 
-const STAGES: { stage: string; label: string; hint: string; content: boolean }[] = [
-  { stage: "connection_request", label: "Connection request", hint: "The invite note when first connecting.", content: false },
-  { stage: "welcome", label: "Welcome", hint: "The first message right after they accept.", content: false },
-  { stage: "follow_up_1", label: "Follow-up 1", hint: "A gentle nudge if there's no reply.", content: false },
-  { stage: "follow_up_2", label: "Follow-up 2", hint: "Shares a relevant article by default.", content: true },
-  { stage: "follow_up_3", label: "Follow-up 3", hint: "Final touch — also shares an article.", content: true },
+const STAGES: { stage: OutreachStep; label: string; hint: string; content: boolean }[] = [
+  { stage: "connection_request", label: "Connection request", hint: "The invite note when first connecting (max 300 chars, no pitch).", content: false },
+  { stage: "welcome", label: "Welcome", hint: "First message right after they accept. Warm, no ask.", content: false },
+  { stage: "follow_up_1", label: "Follow-up 1", hint: "One insight about them + a single open question.", content: false },
+  { stage: "follow_up_2", label: "Follow-up 2", hint: "Go deeper on their priorities. Shares an article by default.", content: true },
+  { stage: "follow_up_3", label: "Follow-up 3", hint: "Tie their challenge to a pattern / light credibility. Shares an article.", content: true },
 ];
 
 type Entry = { promptText: string; shareContent: boolean };
+type Preview = { loading: boolean; text?: string; banned?: string[]; error?: string };
 
 export function PromptSetPanel({
   accountId,
@@ -33,104 +36,86 @@ export function PromptSetPanel({
 }) {
   const router = useRouter();
 
-  const [defText, setDefText] = useState(defaultPrompt);
-  const [savingDef, setSavingDef] = useState(false);
-
+  // Each stage is a full, standalone prompt. Seed an unconfigured stage with the
+  // account's effective default so the admin edits real text, not a blank box.
   const [entries, setEntries] = useState<Record<string, Entry>>(() => {
     const map: Record<string, Entry> = {};
     for (const s of STAGES) {
       const row = initial.find((r) => r.stage === s.stage);
       map[s.stage] = {
-        promptText: row?.promptText ?? "",
+        promptText: row?.promptText ?? defaultPrompt,
         shareContent: row?.shareContent ?? s.content,
       };
     }
     return map;
   });
-  const [savingStages, setSavingStages] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
+  const [savingStage, setSavingStage] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<Record<string, Preview>>({});
 
   function update(stage: string, patch: Partial<Entry>) {
     setEntries((prev) => ({ ...prev, [stage]: { ...prev[stage], ...patch } }));
   }
 
-  function saveDefault() {
-    setSavingDef(true);
-    setAccountDefaultPrompt(accountId, defText)
-      .then(() => {
-        toast.success("Default DM prompt saved");
-        router.refresh();
-      })
-      .catch((e) => toast.error(e instanceof Error ? e.message : "Save failed"))
-      .finally(() => setSavingDef(false));
+  function persist(stages: { stage: string; promptText: string | null; shareContent: boolean }[]) {
+    return saveAccountPromptSet(accountId, stages).then(() => router.refresh());
   }
 
-  function saveStages() {
-    setSavingStages(true);
-    saveAccountPromptSet(
-      accountId,
+  function saveAll() {
+    setSavingAll(true);
+    persist(
       STAGES.map((s) => ({
         stage: s.stage,
         promptText: entries[s.stage]?.promptText || null,
         shareContent: !!entries[s.stage]?.shareContent,
       })),
     )
-      .then(() => {
-        toast.success("Stage prompts saved");
-        router.refresh();
-      })
+      .then(() => toast.success("All stage prompts saved"))
       .catch((e) => toast.error(e instanceof Error ? e.message : "Save failed"))
-      .finally(() => setSavingStages(false));
+      .finally(() => setSavingAll(false));
   }
 
-  const customCount = STAGES.filter((s) => entries[s.stage]?.promptText.trim()).length;
+  function saveStage(stage: string) {
+    setSavingStage(stage);
+    persist([
+      {
+        stage,
+        promptText: entries[stage]?.promptText || null,
+        shareContent: !!entries[stage]?.shareContent,
+      },
+    ])
+      .then(() => toast.success("Stage saved"))
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Save failed"))
+      .finally(() => setSavingStage(null));
+  }
+
+  function runPreview(stage: OutreachStep) {
+    setPreviews((p) => ({ ...p, [stage]: { loading: true } }));
+    previewAiMessage({ systemPrompt: entries[stage]?.promptText || undefined, step: stage })
+      .then((res) =>
+        setPreviews((p) => ({
+          ...p,
+          [stage]: { loading: false, text: res.text, banned: res.bannedWordsFound, error: res.error },
+        })),
+      )
+      .catch((e) =>
+        setPreviews((p) => ({
+          ...p,
+          [stage]: { loading: false, error: e instanceof Error ? e.message : "Preview failed" },
+        })),
+      );
+  }
 
   return (
     <div className="space-y-4">
-      {/* Default DM prompt — drives every DM unless a stage overrides it */}
-      <Card className="border-primary/30">
-        <CardHeader className="flex-row items-center gap-2 space-y-0 pb-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Sparkles className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <CardTitle className="text-base">Default DM prompt · {accountName}</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              This account&apos;s own voice &amp; rules for every DM. Editing this affects only{" "}
-              {accountName} and drives all stages that don&apos;t have their own text below.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Textarea
-            value={defText}
-            onChange={(e) => setDefText(e.target.value)}
-            rows={12}
-            className="font-mono text-xs leading-relaxed"
-            placeholder="Write the system prompt that defines how DMs are written…"
-          />
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">
-              {defText.length.toLocaleString()} characters
-            </span>
-            <Button size="sm" onClick={saveDefault} disabled={savingDef}>
-              {savingDef ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save default prompt
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Per-stage overrides */}
       <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <MessageSquare className="h-4 w-4" />
-          <span>
-            Per-stage voice for <span className="font-medium text-foreground">{accountName}</span>
-            {customCount > 0 && ` · ${customCount} customized`}
-          </span>
-        </div>
-        <Button size="sm" variant="outline" onClick={saveStages} disabled={savingStages}>
-          {savingStages ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+        <p className="text-sm text-muted-foreground">
+          Each stage has its own prompt for{" "}
+          <span className="font-medium text-foreground">{accountName}</span>. Edit any stage and
+          preview a sample before saving.
+        </p>
+        <Button size="sm" onClick={saveAll} disabled={savingAll}>
+          {savingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Save all stages
         </Button>
       </div>
@@ -138,43 +123,79 @@ export function PromptSetPanel({
       <div className="space-y-3">
         {STAGES.map((s, i) => {
           const e = entries[s.stage];
-          const custom = !!e?.promptText.trim();
+          const edited = (e?.promptText ?? "") !== defaultPrompt;
+          const pv = previews[s.stage];
           return (
             <Card key={s.stage}>
-              <CardContent className="space-y-2 py-4">
-                <div className="flex items-center justify-between gap-2">
+              <CardContent className="space-y-3 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-medium tabular-nums">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium tabular-nums text-primary">
                       {i + 1}
                     </span>
                     <span className="text-sm font-medium">{s.label}</span>
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        custom
-                          ? "bg-primary/10 text-primary"
-                          : "bg-muted text-muted-foreground"
+                        edited ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
                       }`}
                     >
-                      {custom ? "Custom voice" : "Uses default"}
+                      {edited ? "Edited" : "Same as default"}
                     </span>
                   </div>
-                  <span className="text-xs text-muted-foreground">{s.hint}</span>
+                  {s.content && (
+                    <label className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1 text-xs">
+                      <Switch
+                        checked={!!e?.shareContent}
+                        onCheckedChange={(v) => update(s.stage, { shareContent: v })}
+                      />
+                      Share a content article
+                    </label>
+                  )}
                 </div>
+                <p className="text-xs text-muted-foreground">{s.hint}</p>
+
                 <Textarea
                   value={e?.promptText ?? ""}
                   onChange={(ev) => update(s.stage, { promptText: ev.target.value })}
-                  rows={4}
-                  className="text-xs leading-relaxed"
-                  placeholder="Leave blank to use the default prompt above. Type here to give this stage its own voice."
+                  rows={9}
+                  className="font-mono text-xs leading-relaxed"
+                  placeholder="System prompt (voice & rules) for this stage…"
                 />
-                {s.stage !== "connection_request" && (
-                  <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
-                    <Switch
-                      checked={!!e?.shareContent}
-                      onCheckedChange={(v) => update(s.stage, { shareContent: v })}
-                    />
-                    Share a relevant content article in this message
-                  </label>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => runPreview(s.stage)} disabled={pv?.loading}>
+                    {pv?.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    Generate preview
+                  </Button>
+                  <Button size="sm" onClick={() => saveStage(s.stage)} disabled={savingStage === s.stage}>
+                    {savingStage === s.stage ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    Save this stage
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {(e?.promptText ?? "").length.toLocaleString()} chars
+                  </span>
+                </div>
+
+                {pv && !pv.loading && (
+                  <div className="space-y-1 rounded-md border bg-muted/30 p-3">
+                    <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                      <Sparkles className="h-3.5 w-3.5" /> Sample output
+                    </div>
+                    {pv.error ? (
+                      <p className="text-sm text-destructive">{pv.error}</p>
+                    ) : (
+                      <p className="whitespace-pre-wrap text-sm">{pv.text}</p>
+                    )}
+                    {pv.banned && pv.banned.length > 0 && (
+                      <p className="flex items-center gap-1 text-xs text-amber-600">
+                        <AlertTriangle className="h-3.5 w-3.5" /> Banned words: {pv.banned.join(", ")}
+                      </p>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>

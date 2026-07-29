@@ -75,7 +75,7 @@ export default async function AccountSettingsPage({
       .from(contentAssets)
       .where(eq(contentAssets.accountId, id))
       .orderBy(desc(contentAssets.createdAt))
-      .limit(12),
+      .limit(500),
   ]);
 
   const sections = sectionRows
@@ -156,7 +156,7 @@ export default async function AccountSettingsPage({
 
         <Section
           title="DM prompts"
-          description="View and edit the default prompt that writes every DM, and give any stage its own voice."
+          description="A separate, editable prompt for each stage of the sequence. Preview a sample before saving."
         >
           <PromptSetPanel
             accountId={account.id}
