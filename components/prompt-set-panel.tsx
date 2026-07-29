@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import { saveAccountPromptSet } from "@/app/(dashboard)/accounts/actions";
 import { previewAiMessage } from "@/app/(dashboard)/templates/actions";
+import { ConnectionPicker, type PickedConnection } from "@/components/connection-picker";
 import { STAGE_STARTER_PROMPTS } from "@/lib/ai/prompts";
 import type { OutreachStep } from "@/lib/ai/generate";
 
@@ -57,6 +58,7 @@ export function PromptSetPanel({
   const [savingAll, setSavingAll] = useState(false);
   const [savingStage, setSavingStage] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, Preview>>({});
+  const [picked, setPicked] = useState<PickedConnection | null>(null);
 
   function update(stage: string, patch: Partial<Entry>) {
     setEntries((prev) => ({ ...prev, [stage]: { ...prev[stage], ...patch } }));
@@ -101,6 +103,7 @@ export function PromptSetPanel({
       step: stage,
       accountId,
       shareContent: !!entries[stage]?.shareContent,
+      connectionId: picked?.id,
     })
       .then((res) =>
         setPreviews((p) => ({
@@ -136,7 +139,18 @@ export function PromptSetPanel({
         </Button>
       </div>
 
-      <div className="space-y-3">
+      {/* Shared contact for previews */}
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-3">
+        <span className="shrink-0 text-sm font-medium">Preview against</span>
+        <div className="min-w-[240px] flex-1">
+          <ConnectionPicker value={picked} onChange={setPicked} />
+        </div>
+        <span className="text-xs text-muted-foreground">
+          Optional — leave empty to use a sample prospect.
+        </span>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
         {STAGES.map((s, i) => {
           const e = entries[s.stage];
           const starter = STAGE_STARTER_PROMPTS[s.stage] ?? "";
@@ -210,7 +224,8 @@ export function PromptSetPanel({
                 {pv && !pv.loading && (
                   <div className="space-y-1 rounded-md border bg-muted/30 p-3">
                     <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                      <Sparkles className="h-3.5 w-3.5" /> Sample output
+                      <Sparkles className="h-3.5 w-3.5" />
+                      {picked ? `Preview for ${picked.name}` : "Sample output"}
                     </div>
                     {pv.error ? (
                       <p className="text-sm text-destructive">{pv.error}</p>
