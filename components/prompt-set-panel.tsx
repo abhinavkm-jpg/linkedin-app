@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Save, Sparkles, Play, AlertTriangle } from "lucide-react";
+import { Loader2, Save, Sparkles, Play, AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import { saveAccountPromptSet } from "@/app/(dashboard)/accounts/actions";
 import { previewAiMessage } from "@/app/(dashboard)/templates/actions";
+import { STAGE_STARTER_PROMPTS } from "@/lib/ai/prompts";
 import type { OutreachStep } from "@/lib/ai/generate";
 
 const STAGES: { stage: OutreachStep; label: string; hint: string; content: boolean }[] = [
@@ -26,24 +27,22 @@ type Preview = { loading: boolean; text?: string; banned?: string[]; error?: str
 export function PromptSetPanel({
   accountId,
   accountName,
-  defaultPrompt,
   initial,
 }: {
   accountId: string;
   accountName: string;
-  defaultPrompt: string;
   initial: { stage: string; promptText: string | null; shareContent: boolean }[];
 }) {
   const router = useRouter();
 
-  // Each stage is a full, standalone prompt. Seed an unconfigured stage with the
-  // account's effective default so the admin edits real text, not a blank box.
+  // Each stage is a standalone prompt covering only that stage's job. Seed an
+  // unconfigured stage with its own tailored starter, not the whole default.
   const [entries, setEntries] = useState<Record<string, Entry>>(() => {
     const map: Record<string, Entry> = {};
     for (const s of STAGES) {
       const row = initial.find((r) => r.stage === s.stage);
       map[s.stage] = {
-        promptText: row?.promptText ?? defaultPrompt,
+        promptText: row?.promptText ?? STAGE_STARTER_PROMPTS[s.stage] ?? "",
         shareContent: row?.shareContent ?? s.content,
       };
     }
@@ -123,7 +122,8 @@ export function PromptSetPanel({
       <div className="space-y-3">
         {STAGES.map((s, i) => {
           const e = entries[s.stage];
-          const edited = (e?.promptText ?? "") !== defaultPrompt;
+          const starter = STAGE_STARTER_PROMPTS[s.stage] ?? "";
+          const edited = (e?.promptText ?? "") !== starter;
           const pv = previews[s.stage];
           return (
             <Card key={s.stage}>
@@ -139,7 +139,7 @@ export function PromptSetPanel({
                         edited ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
                       }`}
                     >
-                      {edited ? "Edited" : "Same as default"}
+                      {edited ? "Edited" : "Suggested"}
                     </span>
                   </div>
                   {s.content && (
@@ -175,6 +175,16 @@ export function PromptSetPanel({
                     )}
                     Save this stage
                   </Button>
+                  {edited && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => update(s.stage, { promptText: starter })}
+                      title="Replace with the suggested starter for this stage"
+                    >
+                      <RotateCcw className="h-4 w-4" /> Reset to suggested
+                    </Button>
+                  )}
                   <span className="text-xs text-muted-foreground">
                     {(e?.promptText ?? "").length.toLocaleString()} chars
                   </span>
