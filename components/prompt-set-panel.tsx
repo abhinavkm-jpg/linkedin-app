@@ -22,7 +22,13 @@ const STAGES: { stage: OutreachStep; label: string; hint: string; content: boole
 ];
 
 type Entry = { promptText: string; shareContent: boolean };
-type Preview = { loading: boolean; text?: string; banned?: string[]; error?: string };
+type Preview = {
+  loading: boolean;
+  text?: string;
+  banned?: string[];
+  error?: string;
+  contentMissing?: boolean;
+};
 
 export function PromptSetPanel({
   accountId,
@@ -90,11 +96,22 @@ export function PromptSetPanel({
 
   function runPreview(stage: OutreachStep) {
     setPreviews((p) => ({ ...p, [stage]: { loading: true } }));
-    previewAiMessage({ systemPrompt: entries[stage]?.promptText || undefined, step: stage })
+    previewAiMessage({
+      systemPrompt: entries[stage]?.promptText || undefined,
+      step: stage,
+      accountId,
+      shareContent: !!entries[stage]?.shareContent,
+    })
       .then((res) =>
         setPreviews((p) => ({
           ...p,
-          [stage]: { loading: false, text: res.text, banned: res.bannedWordsFound, error: res.error },
+          [stage]: {
+            loading: false,
+            text: res.text,
+            banned: res.bannedWordsFound,
+            error: res.error,
+            contentMissing: res.contentMissing,
+          },
         })),
       )
       .catch((e) =>
@@ -199,6 +216,13 @@ export function PromptSetPanel({
                       <p className="text-sm text-destructive">{pv.error}</p>
                     ) : (
                       <p className="whitespace-pre-wrap text-sm">{pv.text}</p>
+                    )}
+                    {pv.contentMissing && (
+                      <p className="flex items-center gap-1 text-xs text-amber-600">
+                        <AlertTriangle className="h-3.5 w-3.5" /> Sharing is on but no shareable
+                        articles were found — import content and tick a section in the Content
+                        library below.
+                      </p>
                     )}
                     {pv.banned && pv.banned.length > 0 && (
                       <p className="flex items-center gap-1 text-xs text-amber-600">

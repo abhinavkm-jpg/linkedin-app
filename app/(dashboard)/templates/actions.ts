@@ -13,6 +13,7 @@ import {
   type ProspectContext,
 } from "@/lib/ai/generate";
 import { renderTemplate, templateVarsFromConnection } from "@/lib/templates";
+import { pickRelevantAssets, contentInstruction } from "@/lib/outreach/content";
 import { getConnections } from "@/lib/data-connections";
 import { getAccessibleAccountIds, isAdmin } from "@/lib/access";
 import { sendMessage, startChat, getProfile, UnipileError } from "@/lib/unipile/client";
@@ -317,7 +318,16 @@ export async function previewAiMessage(input: {
   model?: string;
   step: OutreachStep;
   connectionId?: string;
-}): Promise<{ text?: string; bannedWordsFound?: string[]; error?: string }> {
+  /** Account whose content library to draw a real article from (for content-sharing stages). */
+  accountId?: string;
+  /** When true, inject a real article from the library exactly like a live send does. */
+  shareContent?: boolean;
+}): Promise<{
+  text?: string;
+  bannedWordsFound?: string[];
+  error?: string;
+  contentMissing?: boolean;
+}> {
   await requireUser();
   try {
     let prospect = SAMPLE_PROSPECT;
@@ -326,13 +336,23 @@ export async function previewAiMessage(input: {
       if (!real) return { error: "Connection not found" };
       prospect = real;
     }
+    // Mirror the live send path: when this stage shares content, hand the model
+    // real article options from the account's shareable library.
+    let instructions: string | undefined;
+    let contentMissing = false;
+    if (input.shareContent && input.accountId) {
+      const assets = await pickRelevantAssets(input.accountId, prospect, 5);
+      if (assets.length > 0) instructions = contentInstruction(assets);
+      else contentMissing = true;
+    }
     const res = await generateMessage({
       step: input.step,
       systemPrompt: input.systemPrompt,
       model: input.model,
       prospect,
+      instructions,
     });
-    return { text: res.text, bannedWordsFound: res.bannedWordsFound };
+    return { text: res.text, bannedWordsFound: res.bannedWordsFound, contentMissing };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Generation failed" };
   }

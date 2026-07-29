@@ -51,11 +51,11 @@ Share ONE sharp insight or observation relevant to their industry or role, then 
   follow_up_2: `${STAGE_VOICE}
 
 STAGE — FOLLOW-UP 2
-Go one level deeper: seek to understand their current process, priorities, or challenge. Do not present solutions yet. If a genuinely relevant article helps the point, reference exactly one using the exact URL provided; otherwise skip the link. 50-120 words.`,
+Go one level deeper: seek to understand their current process, priorities, or challenge. Do not present solutions yet. When article options are provided, share the single most relevant one using its exact URL, woven in naturally as a helpful resource. 50-120 words.`,
   follow_up_3: `${STAGE_VOICE}
 
 STAGE — FOLLOW-UP 3 (BREAKUP)
-This is the final, polite close. Acknowledge the timing may not be right and offer to reconnect later (for example, check back next quarter). Keep it low-pressure with no guilt. You may tie their challenge to a pattern you've seen or add light credibility. If a relevant article fits, reference exactly one real URL provided. 50-120 words.`,
+This is the final, polite close. Acknowledge the timing may not be right and offer to reconnect later (for example, check back next quarter). Keep it low-pressure with no guilt. You may tie their challenge to a pattern you've seen or add light credibility. When article options are provided, share the single most relevant one using its exact URL. 50-120 words.`,
 };
 
 /**

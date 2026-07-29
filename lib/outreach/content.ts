@@ -66,5 +66,5 @@ export async function pickRelevantAssets(
 /** Task-message instruction telling the model to reference one real article URL. */
 export function contentInstruction(assets: PickedAsset[]): string {
   const list = assets.map((a) => `- ${a.title} — ${a.url}`).join("\n");
-  return `Reference exactly ONE of these Machintel articles that best fits this prospect, using its EXACT url (never invent, shorten, or alter a URL). Weave it in naturally as a helpful resource, not a bare link dump. If none genuinely fit, don't force a link.\nArticles:\n${list}`;
+  return `This message MUST share a relevant resource. Reference exactly ONE of the articles below — pick the one most relevant to this prospect — using its EXACT url (never invent, shorten, or alter a URL). Weave it in naturally as a helpful resource, not a bare link dump.\nArticles:\n${list}`;
 }
