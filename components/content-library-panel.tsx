@@ -245,7 +245,7 @@ export function ContentLibraryPanel({
             {sections.length === 0 ? (
               <p className="text-sm text-muted-foreground">No content yet.</p>
             ) : (
-              <ul className="divide-y rounded-md border">
+              <ul className="max-h-96 divide-y overflow-y-auto rounded-md border">
                 {sections.map((s) => (
                   <li key={s.section}>
                     <label className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-muted/40">
