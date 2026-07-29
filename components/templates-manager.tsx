@@ -84,6 +84,7 @@ export function TemplatesManager({
   promptUsage = {},
   currentUserId,
   isAdmin = false,
+  promptsOnly = false,
 }: {
   templates: Template[];
   prompts: AiPrompt[];
@@ -91,13 +92,16 @@ export function TemplatesManager({
   promptUsage?: Record<string, number>;
   currentUserId?: string;
   isAdmin?: boolean;
+  promptsOnly?: boolean;
 }) {
   const canManage = (ownerUserId: string | null) =>
     isAdmin || (!!ownerUserId && ownerUserId === currentUserId);
 
   return (
     <div className="space-y-8">
-      <TemplatesSection templates={templates} usage={templateUsage} canManage={canManage} />
+      {!promptsOnly && (
+        <TemplatesSection templates={templates} usage={templateUsage} canManage={canManage} />
+      )}
       <PromptsSection prompts={prompts} usage={promptUsage} canManage={canManage} />
     </div>
   );

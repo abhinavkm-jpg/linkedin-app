@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { RefreshCw, Loader2 } from "lucide-react";
+import { RefreshCw, Loader2, Settings } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,10 +21,12 @@ export function AccountCard({
   account,
   isAdmin,
   members,
+  settingsLink = true,
 }: {
   account: AccountWithStats;
   isAdmin: boolean;
   members: { id: string; name: string | null; email: string }[];
+  settingsLink?: boolean;
 }) {
   const [pending, start] = useTransition();
 
@@ -70,13 +73,27 @@ export function AccountCard({
         <div className="min-w-0">
           <CardTitle className="truncate text-base">{account.name}</CardTitle>
           <p className="text-xs text-muted-foreground">
-            {account.connectionCount.toLocaleString()} connections
+            <span className="font-medium text-foreground">
+              {account.connectionCount.toLocaleString()}
+            </span>{" "}
+            connections synced
             {account.lastSyncAt
-              ? ` · synced ${formatDistanceToNow(account.lastSyncAt, { addSuffix: true })}`
+              ? ` · ${formatDistanceToNow(account.lastSyncAt, { addSuffix: true })}`
               : " · never synced"}
           </p>
         </div>
-        <Badge variant={accountStatusTone(account.status)}>{account.status}</Badge>
+        <div className="flex shrink-0 items-center gap-1">
+          <Badge variant={accountStatusTone(account.status)}>{account.status}</Badge>
+          {settingsLink && isAdmin && (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              render={<Link href={`/accounts/${account.id}`} aria-label="Account settings" />}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-3">
