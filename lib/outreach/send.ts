@@ -327,34 +327,24 @@ export async function resolveStepText(
 
   if (step.sourceType === "ai") {
     const stage = aiStepLabel(step, steps);
-    let systemPrompt: string | undefined;
     let model = step.model ?? undefined;
 
-    // Per-account prompt set: provides the stage's voice + whether it shares an
-    // article. An explicit step prompt still wins over the account default.
     const [setRow] = await db
       .select()
       .from(accountPromptSets)
       .where(and(eq(accountPromptSets.accountId, camp.accountId), eq(accountPromptSets.stage, stage)))
       .limit(1);
 
-    // Precedence: an explicit per-step prompt → the account-stage's edited text
-    // → a linked prompt for the stage → (undefined ⇒ workspace default in generate).
+    // Layered model: VOICE (identity/rules) + a per-stage TASK (what this
+    // message does). An explicit per-step prompt overrides the voice; otherwise
+    // the voice is the account's own default (falling back to the workspace
+    // default inside generateMessage when undefined).
+    let systemPrompt: string | undefined;
     if (step.aiPromptId) {
       const [p] = await db.select().from(aiPrompts).where(eq(aiPrompts.id, step.aiPromptId)).limit(1);
       systemPrompt = p?.systemPrompt;
       model = model ?? p?.model ?? undefined;
-    } else if (setRow?.promptText?.trim()) {
-      systemPrompt = setRow.promptText;
-    } else if (setRow?.aiPromptId) {
-      const [p] = await db.select().from(aiPrompts).where(eq(aiPrompts.id, setRow.aiPromptId)).limit(1);
-      systemPrompt = p?.systemPrompt;
-      model = model ?? p?.model ?? undefined;
-    }
-
-    // Nothing more specific → this account's own default DM prompt (if set).
-    // When still undefined, generateMessage falls back to the workspace default.
-    if (!systemPrompt) {
+    } else {
       const [acct] = await db
         .select({ defaultPrompt: linkedinAccounts.defaultPrompt })
         .from(linkedinAccounts)
@@ -362,6 +352,10 @@ export async function resolveStepText(
         .limit(1);
       if (acct?.defaultPrompt?.trim()) systemPrompt = acct.defaultPrompt;
     }
+
+    // The stage's job (short, editable). Falls back to the built-in per-stage
+    // instruction inside generateMessage when this account hasn't set one.
+    const taskInstruction = setRow?.promptText?.trim() || undefined;
 
     const prospect: ProspectContext = {
       firstName: conn.firstName,
@@ -389,6 +383,7 @@ export async function resolveStepText(
       step: stage,
       prospect,
       systemPrompt,
+      taskInstruction,
       model,
       instructions,
       priorMessages,

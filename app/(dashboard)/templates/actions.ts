@@ -318,6 +318,8 @@ export async function previewAiMessage(input: {
   model?: string;
   step: OutreachStep;
   connectionId?: string;
+  /** The stage's task instruction (layered model) — overrides the built-in one. */
+  taskInstruction?: string;
   /** Account whose content library to draw a real article from (for content-sharing stages). */
   accountId?: string;
   /** When true, inject a real article from the library exactly like a live send does. */
@@ -348,6 +350,7 @@ export async function previewAiMessage(input: {
     const res = await generateMessage({
       step: input.step,
       systemPrompt: input.systemPrompt,
+      taskInstruction: input.taskInstruction,
       model: input.model,
       prospect,
       instructions,

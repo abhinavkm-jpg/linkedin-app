@@ -3,23 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Save, Sparkles, Play, AlertTriangle, RotateCcw } from "lucide-react";
+import { Loader2, Save, Sparkles, Play, AlertTriangle, RotateCcw, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Card, CardContent } from "@/components/ui/card";
-import { saveAccountPromptSet } from "@/app/(dashboard)/accounts/actions";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { saveAccountPromptSet, setAccountDefaultPrompt } from "@/app/(dashboard)/accounts/actions";
 import { previewAiMessage } from "@/app/(dashboard)/templates/actions";
 import { ConnectionPicker, type PickedConnection } from "@/components/connection-picker";
 import { STAGE_STARTER_PROMPTS } from "@/lib/ai/prompts";
 import type { OutreachStep } from "@/lib/ai/generate";
 
 const STAGES: { stage: OutreachStep; label: string; hint: string; content: boolean }[] = [
-  { stage: "connection_request", label: "Connection request", hint: "The invite note when first connecting (max 300 chars, no pitch).", content: false },
-  { stage: "welcome", label: "Welcome", hint: "First message right after they accept. Warm, no ask.", content: false },
-  { stage: "follow_up_1", label: "Follow-up 1", hint: "One insight about them + a single open question.", content: false },
-  { stage: "follow_up_2", label: "Follow-up 2", hint: "Go deeper on their priorities. Shares an article by default.", content: true },
-  { stage: "follow_up_3", label: "Follow-up 3", hint: "Tie their challenge to a pattern / light credibility. Shares an article.", content: true },
+  { stage: "connection_request", label: "Connection request", hint: "The invite note when first connecting.", content: false },
+  { stage: "welcome", label: "Welcome", hint: "First message right after they accept.", content: false },
+  { stage: "follow_up_1", label: "Follow-up 1", hint: "One insight + a single open question.", content: false },
+  { stage: "follow_up_2", label: "Follow-up 2", hint: "Go deeper. Shares an article by default.", content: true },
+  { stage: "follow_up_3", label: "Follow-up 3", hint: "Polite breakup. Shares an article.", content: true },
 ];
 
 type Entry = { promptText: string; shareContent: boolean };
@@ -34,16 +34,21 @@ type Preview = {
 export function PromptSetPanel({
   accountId,
   accountName,
+  defaultPrompt,
   initial,
 }: {
   accountId: string;
   accountName: string;
+  defaultPrompt: string;
   initial: { stage: string; promptText: string | null; shareContent: boolean }[];
 }) {
   const router = useRouter();
 
-  // Each stage is a standalone prompt covering only that stage's job. Seed an
-  // unconfigured stage with its own tailored starter, not the whole default.
+  // The shared VOICE (identity + rules) for this account. Applies to every stage.
+  const [voice, setVoice] = useState(defaultPrompt);
+  const [savingVoice, setSavingVoice] = useState(false);
+
+  // Per-stage TASK — only what that message does. Seeded from short starters.
   const [entries, setEntries] = useState<Record<string, Entry>>(() => {
     const map: Record<string, Entry> = {};
     for (const s of STAGES) {
@@ -64,6 +69,17 @@ export function PromptSetPanel({
     setEntries((prev) => ({ ...prev, [stage]: { ...prev[stage], ...patch } }));
   }
 
+  function saveVoice() {
+    setSavingVoice(true);
+    setAccountDefaultPrompt(accountId, voice)
+      .then(() => {
+        toast.success("Voice saved");
+        router.refresh();
+      })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Save failed"))
+      .finally(() => setSavingVoice(false));
+  }
+
   function persist(stages: { stage: string; promptText: string | null; shareContent: boolean }[]) {
     return saveAccountPromptSet(accountId, stages).then(() => router.refresh());
   }
@@ -77,7 +93,7 @@ export function PromptSetPanel({
         shareContent: !!entries[s.stage]?.shareContent,
       })),
     )
-      .then(() => toast.success("All stage prompts saved"))
+      .then(() => toast.success("All stages saved"))
       .catch((e) => toast.error(e instanceof Error ? e.message : "Save failed"))
       .finally(() => setSavingAll(false));
   }
@@ -99,7 +115,8 @@ export function PromptSetPanel({
   function runPreview(stage: OutreachStep) {
     setPreviews((p) => ({ ...p, [stage]: { loading: true } }));
     previewAiMessage({
-      systemPrompt: entries[stage]?.promptText || undefined,
+      systemPrompt: voice || undefined,
+      taskInstruction: entries[stage]?.promptText || undefined,
       step: stage,
       accountId,
       shareContent: !!entries[stage]?.shareContent,
@@ -127,11 +144,43 @@ export function PromptSetPanel({
 
   return (
     <div className="space-y-4">
+      {/* Shared voice — applies to every stage */}
+      <Card className="border-primary/30">
+        <CardHeader className="flex-row items-center gap-2 space-y-0 pb-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Mic className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <CardTitle className="text-base">Voice · {accountName}</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Identity, positioning &amp; rules used in <span className="font-medium">every</span> DM.
+              Each stage below adds only its own task on top of this.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea
+            value={voice}
+            onChange={(e) => setVoice(e.target.value)}
+            rows={12}
+            className="font-mono text-xs leading-relaxed"
+            placeholder="Who you are, how you write, what to avoid…"
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              {voice.length.toLocaleString()} characters · applies to all stages
+            </span>
+            <Button size="sm" onClick={saveVoice} disabled={savingVoice}>
+              {savingVoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save voice
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex items-center justify-between px-1">
         <p className="text-sm text-muted-foreground">
-          Each stage has its own prompt for{" "}
-          <span className="font-medium text-foreground">{accountName}</span>. Edit any stage and
-          preview a sample before saving.
+          Per-stage task — only what each message should do. The voice above is applied on top.
         </p>
         <Button size="sm" onClick={saveAll} disabled={savingAll}>
           {savingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -188,9 +237,9 @@ export function PromptSetPanel({
                 <Textarea
                   value={e?.promptText ?? ""}
                   onChange={(ev) => update(s.stage, { promptText: ev.target.value })}
-                  rows={9}
-                  className="font-mono text-xs leading-relaxed"
-                  placeholder="System prompt (voice & rules) for this stage…"
+                  rows={4}
+                  className="text-xs leading-relaxed"
+                  placeholder="What this message should do…"
                 />
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -211,14 +260,11 @@ export function PromptSetPanel({
                       size="sm"
                       variant="ghost"
                       onClick={() => update(s.stage, { promptText: starter })}
-                      title="Replace with the suggested starter for this stage"
+                      title="Replace with the suggested instruction for this stage"
                     >
-                      <RotateCcw className="h-4 w-4" /> Reset to suggested
+                      <RotateCcw className="h-4 w-4" /> Reset
                     </Button>
                   )}
-                  <span className="text-xs text-muted-foreground">
-                    {(e?.promptText ?? "").length.toLocaleString()} chars
-                  </span>
                 </div>
 
                 {pv && !pv.loading && (

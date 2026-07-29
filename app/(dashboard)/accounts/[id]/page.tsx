@@ -23,6 +23,7 @@ import { ContentLibraryPanel } from "@/components/content-library-panel";
 import { db } from "@/db";
 import { users, contentAssets, accountPromptSets } from "@/db/schema";
 import { getAccountsWithStats } from "@/lib/data";
+import { getDefaultPrompt } from "@/app/(dashboard)/accounts/actions";
 import { auth } from "@/auth";
 import { isAdmin } from "@/lib/access";
 
@@ -69,8 +70,9 @@ export default async function AccountSettingsPage({
   const account = accounts.find((a) => a.id === id);
   if (!account) notFound();
 
-  const [members, promptSet, sectionRows, assets] = await Promise.all([
+  const [members, globalDefault, promptSet, sectionRows, assets] = await Promise.all([
     db.select({ id: users.id, name: users.name, email: users.email }).from(users),
+    getDefaultPrompt(),
     db
       .select({
         stage: accountPromptSets.stage,
@@ -189,6 +191,7 @@ export default async function AccountSettingsPage({
           <PromptSetPanel
             accountId={account.id}
             accountName={account.name}
+            defaultPrompt={account.defaultPrompt || globalDefault}
             initial={promptSet}
           />
         </Section>

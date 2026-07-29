@@ -128,6 +128,12 @@ export interface GenerateOptions {
   priorMessages?: Array<{ from: "me" | "them"; text: string }>;
   /** Extra guidance for this specific message. */
   instructions?: string;
+  /**
+   * What this specific message should do (the stage's job). Overrides the
+   * built-in STEP_INSTRUCTIONS when provided — the layered model pairs the
+   * account's voice (systemPrompt) with a per-stage task instruction.
+   */
+  taskInstruction?: string;
 }
 
 export interface GeneratedMessage {
@@ -149,7 +155,7 @@ export async function generateMessage(opts: GenerateOptions): Promise<GeneratedM
   const system = `${base}\n\n${FORMATTING_RULES}`;
 
   const parts: string[] = [
-    STEP_INSTRUCTIONS[opts.step],
+    opts.taskInstruction?.trim() || STEP_INSTRUCTIONS[opts.step],
     "",
     "Prospect:",
     buildProspectBlock(opts.prospect),
