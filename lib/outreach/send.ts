@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   enrollments,
@@ -18,7 +18,7 @@ import {
   type LinkedinAccount,
 } from "@/db/schema";
 import { canSend, canEnrichNow, incrementCounter } from "@/lib/rate-limit";
-import { sendInvitation, startChat, sendMessage, getProfile, UnipileError } from "@/lib/unipile/client";
+import { sendInvitation, startChat, sendMessage, getProfile, listMessages, UnipileError } from "@/lib/unipile/client";
 import { renderTemplate, templateVarsFromConnection } from "@/lib/templates";
 import { generateMessage, type OutreachStep, type ProspectContext } from "@/lib/ai/generate";
 import { connectionMatchesIcp, hasIcp } from "@/lib/icp";
@@ -381,11 +381,51 @@ export async function resolveStepText(
       if (assets.length > 0) instructions = contentInstruction(assets);
     }
 
-    const res = await generateMessage({ step: stage, prospect, systemPrompt, model, instructions });
+    // Feed the real thread so follow-ups build on what was already said, never
+    // repeat it. The invite has no chat yet, so skip it there.
+    const priorMessages = step.type === "invite" ? undefined : await getPriorMessages(conn.id);
+
+    const res = await generateMessage({
+      step: stage,
+      prospect,
+      systemPrompt,
+      model,
+      instructions,
+      priorMessages,
+    });
     return res.text;
   }
 
   return "";
+}
+
+/**
+ * The DM thread with a connection so far, oldest→newest, labeled by sender.
+ * Unipile is the only complete source (the DB keeps just our sends + the latest
+ * message per thread), so we read it live. Never throws — a missing chat or a
+ * Unipile hiccup must not block a send, so it degrades to no history.
+ */
+async function getPriorMessages(
+  connectionId: string,
+): Promise<Array<{ from: "me" | "them"; text: string }>> {
+  const [chat] = await db
+    .select({ unipileChatId: chats.unipileChatId })
+    .from(chats)
+    .where(eq(chats.connectionId, connectionId))
+    .orderBy(desc(chats.lastMessageAt))
+    .limit(1);
+  if (!chat?.unipileChatId) return [];
+
+  try {
+    const res = await listMessages({ chatId: chat.unipileChatId, limit: 20 });
+    const ordered = res.items
+      .map((m) => ({ from: (m.is_sender === 1 ? "me" : "them") as "me" | "them", text: (m.text ?? "").trim() }))
+      .filter((m) => m.text.length > 0)
+      .reverse(); // Unipile returns newest-first
+    return ordered.slice(-12); // keep the prompt tight
+  } catch {
+    return [];
+  }
 }
 
 function aiStepLabel(step: SequenceStep, steps: SequenceStep[]): OutreachStep {
