@@ -19,6 +19,18 @@ export function accountStatusTone(status: LinkedinAccount["status"]): BadgeVaria
   }
 }
 
+/** Colored pill classes for an account's connection status (dot + label). */
+export function accountStatusPillClasses(status: LinkedinAccount["status"]): string {
+  switch (status) {
+    case "OK":
+      return "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300";
+    case "CONNECTING":
+      return "bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300";
+    default:
+      return "bg-rose-100 text-rose-700 dark:bg-rose-400/15 dark:text-rose-300";
+  }
+}
+
 export function relationshipStatusLabel(status: string): string {
   return status.replace(/_/g, " ");
 }

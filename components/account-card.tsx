@@ -4,14 +4,14 @@ import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { RefreshCw, Loader2, Settings } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { RefreshCw, Loader2, Settings, Sparkles, UserRound } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { QuotaGauge } from "@/components/quota-gauge";
-import { accountStatusTone } from "@/lib/status";
+import { AccountAvatar } from "@/components/account-avatar";
+import { accountStatusPillClasses } from "@/lib/status";
+import { cn } from "@/lib/utils";
 import { startSync, assignAccountOwner, setAccountAutoEnrich } from "@/app/(dashboard)/accounts/actions";
 import type { AccountWithStats } from "@/lib/data";
 
@@ -27,6 +27,7 @@ export function AccountCard({
   settingsLink?: boolean;
 }) {
   const [pending, start] = useTransition();
+  const syncing = pending || account.syncStatus === "running";
 
   function sync() {
     start(async () => {
@@ -66,95 +67,102 @@ export function AccountCard({
   }
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
-        <div className="min-w-0">
-          <CardTitle className="truncate text-base">{account.name}</CardTitle>
+    <Card className="group relative gap-0 overflow-hidden py-0 transition-shadow hover:shadow-md">
+      <div className="h-1 w-full bg-gradient-to-r from-primary via-primary/70 to-primary/30" />
+
+      {/* Identity */}
+      <div className="flex items-center gap-3 px-5 pt-5">
+        <AccountAvatar name={account.name} className="h-11 w-11 text-sm" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold leading-tight">{account.name}</p>
           <p className="text-xs text-muted-foreground">
             <span className="font-medium text-foreground">
               {account.connectionCount.toLocaleString()}
             </span>{" "}
-            connections synced
+            connections
             {account.lastSyncAt
-              ? ` · ${formatDistanceToNow(account.lastSyncAt, { addSuffix: true })}`
+              ? ` · synced ${formatDistanceToNow(account.lastSyncAt, { addSuffix: true })}`
               : " · never synced"}
           </p>
         </div>
-        <Badge variant={accountStatusTone(account.status)}>{account.status}</Badge>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-3">
-          <QuotaGauge label="Invites / day" used={account.quotas.invite.used} cap={account.quotas.invite.cap} />
-          <QuotaGauge label="Messages / day" used={account.quotas.message.used} cap={account.quotas.message.cap} />
-          <QuotaGauge label="InMail / day" used={account.quotas.inmail.used} cap={account.quotas.inmail.cap} />
-          <QuotaGauge label="Enrichments / day" used={account.quotas.enrich.used} cap={account.quotas.enrich.cap} />
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+            accountStatusPillClasses(account.status),
+          )}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-current" />
+          {account.status}
+        </span>
+      </div>
+
+      <CardContent className="space-y-4 px-5 pt-4 pb-5">
+        {/* Daily quotas */}
+        <div className="grid grid-cols-2 gap-x-5 gap-y-3 rounded-lg border bg-muted/30 p-3">
+          <QuotaGauge label="Invites" used={account.quotas.invite.used} cap={account.quotas.invite.cap} />
+          <QuotaGauge label="Messages" used={account.quotas.message.used} cap={account.quotas.message.cap} />
+          <QuotaGauge label="InMail" used={account.quotas.inmail.used} cap={account.quotas.inmail.cap} />
+          <QuotaGauge label="Enrichments" used={account.quotas.enrich.used} cap={account.quotas.enrich.cap} />
           <QuotaGauge
-            label="Auto-enrich / day"
+            label="Auto-enrich"
             used={account.quotas.autoEnrich.used}
             cap={account.quotas.autoEnrich.cap}
           />
         </div>
 
         {isAdmin && (
-          <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md border px-3 py-2">
-            <span className="text-sm">
-              <span className="font-medium">Auto-enrich daily</span>
-              <span className="block text-xs text-muted-foreground">
-                Fill in job title, company &amp; country for ICP — {account.autoEnrichDailyCap}/day.
+          <>
+            <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-2 transition-colors hover:bg-muted/40">
+              <span className="flex items-start gap-2 text-sm">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span>
+                  <span className="font-medium">Auto-enrich daily</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Fill job title, company &amp; country for ICP — {account.autoEnrichDailyCap}/day.
+                  </span>
+                </span>
               </span>
-            </span>
-            <Switch
-              checked={account.autoEnrich}
-              onCheckedChange={toggleAutoEnrich}
-              disabled={pending}
-            />
-          </label>
-        )}
+              <Switch checked={account.autoEnrich} onCheckedChange={toggleAutoEnrich} disabled={pending} />
+            </label>
 
-        {isAdmin && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Assigned to</Label>
-            <select
-              className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm"
-              value={account.ownerUserId ?? ""}
-              onChange={(e) => assign(e.target.value)}
-              disabled={pending}
-            >
-              <option value="">Unassigned</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name ?? m.email}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {isAdmin && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={sync}
-              disabled={pending || account.syncStatus === "running"}
-            >
-              {pending || account.syncStatus === "running" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              {account.syncStatus === "running" ? "Syncing…" : "Sync connections"}
-            </Button>
-            {settingsLink && (
-              <Button
-                variant="outline"
-                size="sm"
-                render={<Link href={`/accounts/${account.id}`} />}
+            <div className="flex items-center gap-2 rounded-lg border px-3 py-1.5">
+              <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Owner</span>
+              <select
+                className="ml-auto h-8 max-w-[60%] rounded-md border border-input bg-transparent px-2 text-sm"
+                value={account.ownerUserId ?? ""}
+                onChange={(e) => assign(e.target.value)}
+                disabled={pending}
               >
-                <Settings className="h-4 w-4" /> Content &amp; prompts
+                <option value="">Unassigned</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name ?? m.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={sync} disabled={syncing} className="flex-1">
+                {syncing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                {account.syncStatus === "running" ? "Syncing…" : "Sync"}
               </Button>
-            )}
-          </div>
+              {settingsLink && (
+                <Button
+                  size="sm"
+                  render={<Link href={`/accounts/${account.id}`} />}
+                  className="flex-1"
+                >
+                  <Settings className="h-4 w-4" /> Settings
+                </Button>
+              )}
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
