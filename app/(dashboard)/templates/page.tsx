@@ -3,9 +3,10 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { TemplatesManager } from "@/components/templates-manager";
 import { db } from "@/db";
-import { templates, aiPrompts, sequenceSteps, type Template, type AiPrompt } from "@/db/schema";
+import { templates, aiPrompts, sequenceSteps, linkedinAccounts, type Template, type AiPrompt } from "@/db/schema";
+import { inArray } from "drizzle-orm";
 import { auth } from "@/auth";
-import { ownerVisibilityScope, isAdmin } from "@/lib/access";
+import { ownerVisibilityScope, isAdmin, getAccessibleAccountIds } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function TemplatesPage() {
     promptUsage: Record<string, number>;
     currentUserId: string;
     admin: boolean;
+    accounts: { id: string; name: string }[];
   } | null = null;
   let error: string | null = null;
   try {
@@ -42,6 +44,17 @@ export default async function TemplatesPage() {
     ]);
     const templateUsage = Object.fromEntries(tplUse.map((r) => [r.id as string, Number(r.n)]));
     const promptUsage = Object.fromEntries(promptUse.map((r) => [r.id as string, Number(r.n)]));
+
+    const accountIds = await getAccessibleAccountIds(user);
+    const accounts =
+      accountIds !== null && accountIds.length === 0
+        ? []
+        : await db
+            .select({ id: linkedinAccounts.id, name: linkedinAccounts.name })
+            .from(linkedinAccounts)
+            .where(accountIds === null ? undefined : inArray(linkedinAccounts.id, accountIds))
+            .orderBy(linkedinAccounts.name);
+
     data = {
       tpls,
       prompts,
@@ -49,6 +62,7 @@ export default async function TemplatesPage() {
       promptUsage,
       currentUserId: user.id,
       admin: isAdmin(user),
+      accounts,
     };
   } catch (e) {
     error = e instanceof Error ? e.message : "Failed to load";
@@ -66,6 +80,7 @@ export default async function TemplatesPage() {
       promptUsage={data.promptUsage}
       currentUserId={data.currentUserId}
       isAdmin={data.admin}
+      accounts={data.accounts}
     />
   ) : null;
 

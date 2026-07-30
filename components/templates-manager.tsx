@@ -85,6 +85,7 @@ export function TemplatesManager({
   currentUserId,
   isAdmin = false,
   promptsOnly = false,
+  accounts = [],
 }: {
   templates: Template[];
   prompts: AiPrompt[];
@@ -93,6 +94,7 @@ export function TemplatesManager({
   currentUserId?: string;
   isAdmin?: boolean;
   promptsOnly?: boolean;
+  accounts?: { id: string; name: string }[];
 }) {
   const canManage = (ownerUserId: string | null) =>
     isAdmin || (!!ownerUserId && ownerUserId === currentUserId);
@@ -102,7 +104,7 @@ export function TemplatesManager({
       {!promptsOnly && (
         <TemplatesSection templates={templates} usage={templateUsage} canManage={canManage} />
       )}
-      <PromptsSection prompts={prompts} usage={promptUsage} canManage={canManage} />
+      <PromptsSection prompts={prompts} usage={promptUsage} canManage={canManage} accounts={accounts} />
     </div>
   );
 }
@@ -470,10 +472,12 @@ function PromptsSection({
   prompts,
   usage,
   canManage,
+  accounts,
 }: {
   prompts: AiPrompt[];
   usage: Record<string, number>;
   canManage: (ownerUserId: string | null) => boolean;
+  accounts: { id: string; name: string }[];
 }) {
   const [editing, setEditing] = useState<AiPrompt | null>(null);
   const [open, setOpen] = useState(false);
@@ -576,7 +580,7 @@ function PromptsSection({
         </div>
       )}
 
-      <PromptDialog open={open} onOpenChange={setOpen} prompt={editing} />
+      <PromptDialog open={open} onOpenChange={setOpen} prompt={editing} accounts={accounts} />
     </section>
   );
 }
@@ -585,21 +589,26 @@ function PromptDialog({
   open,
   onOpenChange,
   prompt,
+  accounts,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   prompt: AiPrompt | null;
+  accounts: { id: string; name: string }[];
 }) {
   const [pending, start] = useTransition();
   const [previewing, setPreviewing] = useState(false);
   const [preview, setPreview] = useState<string>("");
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [contentMissing, setContentMissing] = useState(false);
   const [name, setName] = useState("");
   const [model, setModel] = useState("claude-sonnet-5");
   const [isDefault, setIsDefault] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [picked, setPicked] = useState<PickedConnection | null>(null);
   const [step, setStep] = useState("welcome");
+  const [accountId, setAccountId] = useState("");
+  const [shareContent, setShareContent] = useState(false);
   const [improving, setImproving] = useState(false);
 
   const key = prompt?.id ?? "new";
@@ -608,11 +617,19 @@ function PromptDialog({
     setModel(prompt?.model ?? "claude-sonnet-5");
     setIsDefault(prompt?.isDefault ?? false);
     setSystemPrompt(prompt?.systemPrompt ?? "");
+    setAccountId(accounts[0]?.id ?? "");
+    setShareContent(false);
     setPreview("");
     setPreviewError(null);
+    setContentMissing(false);
     setPicked(null);
     setStep("welcome");
   });
+
+  function changeStage(v: string) {
+    setStep(v);
+    setShareContent(v === "follow_up_2" || v === "follow_up_3");
+  }
 
   function submit() {
     if (!name.trim() || !systemPrompt.trim()) {
@@ -643,13 +660,17 @@ function PromptDialog({
     setPreviewing(true);
     setPreviewError(null);
     setPreview("");
+    setContentMissing(false);
     previewAiMessage({
       systemPrompt,
       model,
       step: step as "connection_request" | "welcome" | "follow_up_1" | "follow_up_2" | "follow_up_3",
       connectionId: picked?.id,
+      accountId: shareContent ? accountId || undefined : undefined,
+      shareContent: shareContent && !!accountId,
     })
       .then((res) => {
+        setContentMissing(!!res.contentMissing);
         if (res.error) {
           setPreviewError(res.error);
         } else if (!res.text?.trim()) {
@@ -758,7 +779,7 @@ function PromptDialog({
               <select
                 className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
                 value={step}
-                onChange={(e) => setStep(e.target.value)}
+                onChange={(e) => changeStage(e.target.value)}
               >
                 {PREVIEW_STEPS.map((s) => (
                   <option key={s.value} value={s.value}>
@@ -771,6 +792,30 @@ function PromptDialog({
               <span className="font-medium">Stage:</span>{" "}
               {PREVIEW_STEPS.find((s) => s.value === step)?.description}
             </p>
+
+            {/* Content sharing — pull a real article from an account's library */}
+            {accounts.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-md border bg-background px-3 py-2">
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Switch checked={shareContent} onCheckedChange={setShareContent} />
+                  Share a content article
+                </label>
+                <select
+                  className="ml-auto h-8 rounded-md border border-input bg-transparent px-2 text-sm disabled:opacity-50"
+                  value={accountId}
+                  onChange={(e) => setAccountId(e.target.value)}
+                  disabled={!shareContent}
+                  title="Which account's content library to draw from"
+                >
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={runPreview} disabled={previewing || !systemPrompt}>
                 {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -781,6 +826,12 @@ function PromptDialog({
             {previewError && (
               <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
                 {previewError}
+              </div>
+            )}
+            {contentMissing && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-600">
+                Sharing is on but this account has no shareable articles — import content and tick a
+                section in that account&apos;s Content library.
               </div>
             )}
             {preview && (
