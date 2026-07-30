@@ -593,6 +593,7 @@ function PromptDialog({
   const [pending, start] = useTransition();
   const [previewing, setPreviewing] = useState(false);
   const [preview, setPreview] = useState<string>("");
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [model, setModel] = useState("claude-sonnet-5");
   const [isDefault, setIsDefault] = useState(false);
@@ -608,6 +609,7 @@ function PromptDialog({
     setIsDefault(prompt?.isDefault ?? false);
     setSystemPrompt(prompt?.systemPrompt ?? "");
     setPreview("");
+    setPreviewError(null);
     setPicked(null);
     setStep("welcome");
   });
@@ -639,6 +641,8 @@ function PromptDialog({
 
   function runPreview() {
     setPreviewing(true);
+    setPreviewError(null);
+    setPreview("");
     previewAiMessage({
       systemPrompt,
       model,
@@ -646,13 +650,17 @@ function PromptDialog({
       connectionId: picked?.id,
     })
       .then((res) => {
-        if (res.error) toast.error(res.error);
-        else {
-          setPreview(res.text ?? "");
+        if (res.error) {
+          setPreviewError(res.error);
+        } else if (!res.text?.trim()) {
+          setPreviewError("The model returned an empty message. Try again, or simplify the prompt.");
+        } else {
+          setPreview(res.text);
           if (res.bannedWordsFound?.length)
             toast.warning(`Contains discouraged words: ${res.bannedWordsFound.join(", ")}`);
         }
       })
+      .catch((e) => setPreviewError(e instanceof Error ? e.message : "Preview failed"))
       .finally(() => setPreviewing(false));
   }
 
@@ -770,6 +778,11 @@ function PromptDialog({
               </Button>
               <SendTestButton connection={picked} text={preview} />
             </div>
+            {previewError && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                {previewError}
+              </div>
+            )}
             {preview && (
               <div className="rounded-md border bg-background p-3 text-sm">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">
