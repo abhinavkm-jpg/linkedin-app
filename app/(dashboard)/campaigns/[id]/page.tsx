@@ -17,6 +17,7 @@ import { IcpEditor } from "@/components/icp-editor";
 import { EnrollmentPanel } from "@/components/enrollment-panel";
 import { StepsEditor } from "@/components/steps-editor";
 import { ReviewQueue } from "@/components/review-queue";
+import { CampaignRecipients } from "@/components/campaign-recipients";
 import { db } from "@/db";
 import { campaigns, sequenceSteps, templates, aiPrompts, enrollments, connections, activities } from "@/db/schema";
 import { getIcpMatches } from "@/lib/data-connections";
@@ -46,7 +47,7 @@ export default async function CampaignDetailPage({
     ownerVisibilityScope(aiPrompts.ownerUserId, session!.user),
   ]);
 
-  const [steps, tpls, prompts, stateCounts, enrolled, drafts] = await Promise.all([
+  const [steps, tpls, prompts, stateCounts, enrolled, drafts, campaignActivity] = await Promise.all([
     db.select().from(sequenceSteps).where(eq(sequenceSteps.campaignId, id)).orderBy(asc(sequenceSteps.stepOrder)),
     db.select().from(templates).where(tScope).orderBy(desc(templates.createdAt)),
     db.select().from(aiPrompts).where(pScope).orderBy(desc(aiPrompts.createdAt)),
@@ -58,17 +59,22 @@ export default async function CampaignDetailPage({
     db
       .select({
         enrollmentId: enrollments.id,
+        connectionId: enrollments.connectionId,
         state: enrollments.state,
+        currentStep: enrollments.currentStep,
         nextRunAt: enrollments.nextRunAt,
+        lastError: enrollments.lastError,
+        updatedAt: enrollments.updatedAt,
         firstName: connections.firstName,
         lastName: connections.lastName,
+        company: connections.company,
         headline: connections.headline,
       })
       .from(enrollments)
       .innerJoin(connections, eq(connections.id, enrollments.connectionId))
       .where(eq(enrollments.campaignId, id))
       .orderBy(desc(enrollments.updatedAt))
-      .limit(100),
+      .limit(300),
     db
       .select({
         activityId: activities.id,
@@ -82,6 +88,18 @@ export default async function CampaignDetailPage({
       .innerJoin(connections, eq(connections.id, activities.connectionId))
       .where(and(eq(activities.campaignId, id), eq(activities.status, "pending")))
       .limit(50),
+    db
+      .select({
+        connectionId: activities.connectionId,
+        type: activities.type,
+        status: activities.status,
+        content: activities.content,
+        createdAt: activities.createdAt,
+      })
+      .from(activities)
+      .where(and(eq(activities.campaignId, id), inArray(activities.type, ["invite", "message"])))
+      .orderBy(asc(activities.createdAt))
+      .limit(1000),
   ]);
 
   const t = campaign.targeting ?? {};
@@ -168,6 +186,29 @@ export default async function CampaignDetailPage({
             }))}
           />
         )}
+
+        <CampaignRecipients
+          stepCount={steps.length}
+          recipients={enrolled.map((e) => ({
+            enrollmentId: e.enrollmentId,
+            connectionId: e.connectionId,
+            name: [e.firstName, e.lastName].filter(Boolean).join(" ") || e.headline || "Unknown",
+            company: e.company,
+            headline: e.headline,
+            state: e.state,
+            currentStep: e.currentStep,
+            nextRunAt: e.nextRunAt ? e.nextRunAt.toISOString() : null,
+            lastError: e.lastError,
+            updatedAt: e.updatedAt.toISOString(),
+          }))}
+          activities={campaignActivity.map((a) => ({
+            connectionId: a.connectionId ?? "",
+            type: a.type,
+            status: a.status,
+            content: a.content,
+            createdAt: a.createdAt.toISOString(),
+          }))}
+        />
 
         <Accordion defaultValue={["icp"]}>
           <AccordionItem value="icp">
