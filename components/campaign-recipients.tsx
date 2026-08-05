@@ -2,7 +2,8 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { ChevronRight, Search, Users } from "lucide-react";
+import { ChevronRight, ChevronLeft, Search, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -78,6 +79,8 @@ function activityTone(status: string): string {
 
 type FilterKey = "all" | "contacted" | "replied" | "attention";
 
+const PAGE_SIZE = 20;
+
 export function CampaignRecipients({
   recipients,
   activities,
@@ -90,6 +93,7 @@ export function CampaignRecipients({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   // Group activities by connection (input already ordered oldest → newest).
   const byConnection = useMemo(() => {
@@ -145,6 +149,20 @@ export function CampaignRecipients({
     });
   }, [enriched, filter, query]);
 
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = rows.slice(start, start + PAGE_SIZE);
+
+  function setFilterReset(key: FilterKey) {
+    setFilter(key);
+    setPage(1);
+  }
+  function setQueryReset(v: string) {
+    setQuery(v);
+    setPage(1);
+  }
+
   const chips: { key: FilterKey; label: string }[] = [
     { key: "all", label: "All" },
     { key: "contacted", label: "Contacted" },
@@ -165,7 +183,7 @@ export function CampaignRecipients({
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => setQueryReset(e.target.value)}
             placeholder="Search a person…"
             className="h-9 pl-8"
           />
@@ -176,7 +194,7 @@ export function CampaignRecipients({
         {chips.map((c) => (
           <button
             key={c.key}
-            onClick={() => setFilter(c.key)}
+            onClick={() => setFilterReset(c.key)}
             className={cn(
               "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
               filter === c.key
@@ -214,7 +232,7 @@ export function CampaignRecipients({
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((r) => {
+              pageRows.map((r) => {
                 const open = openId === r.enrollmentId;
                 const schedule = scheduleLabel(r.state, r.nextRunAt);
                 const initials =
@@ -335,6 +353,36 @@ export function CampaignRecipients({
           </TableBody>
         </Table>
       </div>
+
+      {rows.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">
+            Showing {start + 1}–{Math.min(start + PAGE_SIZE, rows.length)} of{" "}
+            {rows.length.toLocaleString()}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(currentPage - 1)}
+              disabled={currentPage <= 1}
+            >
+              <ChevronLeft className="h-4 w-4" /> Prev
+            </Button>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              Page {currentPage} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+            >
+              Next <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
