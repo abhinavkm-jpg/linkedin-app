@@ -4,7 +4,16 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { Send, Loader2, MessageSquare, ExternalLink, Bot, Search } from "lucide-react";
+import {
+  Send,
+  Loader2,
+  MessageSquare,
+  ExternalLink,
+  Bot,
+  Search,
+  List,
+  LayoutGrid,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -71,6 +80,7 @@ function initials(name: string | null): string {
 }
 
 type Tab = "all" | "unread" | "handoff";
+type View = "list" | "grid";
 
 export function InboxList({ chats }: { chats: InboxRow[] }) {
   const router = useRouter();
@@ -79,6 +89,7 @@ export function InboxList({ chats }: { chats: InboxRow[] }) {
   const [query, setQuery] = useState("");
   const [account, setAccount] = useState("");
   const [tab, setTab] = useState<Tab>("all");
+  const [view, setView] = useState<View>("list");
 
   const accountNames = useMemo(
     () => [...new Set(chats.map((c) => c.accountName).filter(Boolean) as string[])].sort(),
@@ -160,17 +171,51 @@ export function InboxList({ chats }: { chats: InboxRow[] }) {
             </TabButton>
           )}
         </div>
+        <div className="inline-flex rounded-md border p-0.5">
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            aria-label="List view"
+            title="List view"
+            className={cn(
+              "rounded p-1.5 transition-colors",
+              view === "list"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <List className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("grid")}
+            aria-label="Grid view"
+            title="Grid view"
+            className={cn(
+              "rounded p-1.5 transition-colors",
+              view === "grid"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
-      <div className="space-y-2">
-        {filtered.length === 0 ? (
-          <p className="rounded-lg border bg-muted/20 py-12 text-center text-sm text-muted-foreground">
-            No conversations match these filters.
-          </p>
-        ) : (
-          filtered.map((c) => <ChatRowButton key={c.id} chat={c} onOpen={() => open(c)} />)
-        )}
-      </div>
+      {filtered.length === 0 ? (
+        <p className="rounded-lg border bg-muted/20 py-12 text-center text-sm text-muted-foreground">
+          No conversations match these filters.
+        </p>
+      ) : view === "grid" ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((c) => <ChatGridCard key={c.id} chat={c} onOpen={() => open(c)} />)}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((c) => <ChatRowButton key={c.id} chat={c} onOpen={() => open(c)} />)}
+        </div>
+      )}
 
       <ChatDialog
         key={active?.id ?? "closed"}
@@ -260,6 +305,65 @@ function ChatRowButton({ chat, onOpen }: { chat: InboxRow; onOpen: () => void })
             {formatDistanceToNow(new Date(chat.lastMessageAt), { addSuffix: true })}
           </span>
         )}
+      </button>
+    </Card>
+  );
+}
+
+function ChatGridCard({ chat, onOpen }: { chat: InboxRow; onOpen: () => void }) {
+  const unread = chat.unreadCount > 0;
+  return (
+    <Card
+      className={cn(
+        "h-full overflow-hidden transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md",
+        unread && "border-primary/40 bg-primary/[0.04]",
+      )}
+    >
+      <button onClick={onOpen} className="flex h-full w-full flex-col gap-2 p-4 text-left">
+        <div className="flex items-center gap-2.5">
+          <Avatar size="lg" className="shrink-0">
+            {chat.avatarUrl && <AvatarImage src={chat.avatarUrl} alt={chat.name} />}
+            <AvatarFallback
+              className={cn(
+                "font-medium",
+                unread ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary",
+              )}
+            >
+              {initials(chat.name)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className={cn("truncate", unread ? "font-semibold" : "font-medium")}>
+                {chat.name}
+              </span>
+              {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+            </div>
+            {chat.headline ? (
+              <p className="truncate text-xs text-muted-foreground">{chat.headline}</p>
+            ) : chat.accountName ? (
+              <p className="truncate text-xs text-muted-foreground">via {chat.accountName}</p>
+            ) : null}
+          </div>
+        </div>
+
+        <p
+          className={cn(
+            "line-clamp-2 text-sm",
+            unread ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
+          {chat.lastMessageText}
+        </p>
+
+        <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+          <AiNote decision={chat.aiDecision} reason={chat.aiReason} />
+          {chat.lastMessageAt && (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {formatDistanceToNow(new Date(chat.lastMessageAt), { addSuffix: true })}
+            </span>
+          )}
+        </div>
       </button>
     </Card>
   );
