@@ -119,99 +119,138 @@ export function CampaignHeader({
     });
   }
 
+  const toggles: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }[] = [
+    {
+      label: "Auto-enroll matching connections",
+      hint: "Keep adding new matching connections automatically.",
+      checked: autoEnroll,
+      onChange: toggleAutoEnroll,
+    },
+    {
+      label: "Message each person only once",
+      hint: "Skip anyone who was already contacted.",
+      checked: dedupeContacts,
+      onChange: toggleDedupe,
+    },
+    {
+      label: "Review AI before sending",
+      hint: "Hold AI drafts in the review queue for approval.",
+      checked: reviewBeforeSend,
+      onChange: toggleReview,
+    },
+    {
+      label: "AI triage replies",
+      hint: "Let AI decide whether a reply should stop the sequence.",
+      checked: aiReplyDecision,
+      onChange: toggleAiReply,
+    },
+  ];
+
   return (
     <Card>
-      <CardContent className="space-y-4 py-4">
-        <div className="flex flex-wrap items-center gap-2">
-          {editingName ? (
-            <div className="flex items-center gap-2">
-              <Input
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                className="h-8 w-64"
-                autoFocus
-              />
-              <Button size="icon-sm" onClick={saveName} disabled={pending}>
-                <Check className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <button
-              className="flex items-center gap-2 text-lg font-semibold hover:text-primary"
-              onClick={() => {
-                setDraftName(name);
-                setEditingName(true);
-              }}
-            >
-              {name}
-              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
-          )}
-          <Badge variant={statusTone[status] ?? "outline"}>{status}</Badge>
+      <CardContent className="py-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          {/* Left: identity, actions, progress, notes */}
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {editingName ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    className="h-8 w-64"
+                    autoFocus
+                  />
+                  <Button size="icon-sm" onClick={saveName} disabled={pending}>
+                    <Check className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  className="flex items-center gap-2 text-lg font-semibold hover:text-primary"
+                  onClick={() => {
+                    setDraftName(name);
+                    setEditingName(true);
+                  }}
+                >
+                  {name}
+                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              )}
+              <Badge variant={statusTone[status] ?? "outline"}>{status}</Badge>
 
-          <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <Switch checked={autoEnroll} onCheckedChange={toggleAutoEnroll} disabled={pending} />
-              Auto-enroll matching connections
-            </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <Switch checked={dedupeContacts} onCheckedChange={toggleDedupe} disabled={pending} />
-              Message each person only once
-            </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <Switch checked={reviewBeforeSend} onCheckedChange={toggleReview} disabled={pending} />
-              Review AI before sending
-            </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <Switch checked={aiReplyDecision} onCheckedChange={toggleAiReply} disabled={pending} />
-              AI triage replies
-            </label>
-            {isActive ? (
-              <Button size="sm" variant="outline" onClick={() => setStatus("paused")} disabled={pending}>
-                <Pause className="h-4 w-4" /> Pause
-              </Button>
-            ) : (
-              <Button size="sm" onClick={() => setStatus("active")} disabled={pending || !hasSteps}>
-                <Play className="h-4 w-4" /> Activate
-              </Button>
+              <div className="ml-auto flex items-center gap-1">
+                {isActive ? (
+                  <Button size="sm" variant="outline" onClick={() => setStatus("paused")} disabled={pending}>
+                    <Pause className="h-4 w-4" /> Pause
+                  </Button>
+                ) : (
+                  <Button size="sm" onClick={() => setStatus("active")} disabled={pending || !hasSteps}>
+                    <Play className="h-4 w-4" /> Activate
+                  </Button>
+                )}
+                <Button size="icon-sm" variant="ghost" onClick={remove} disabled={pending}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {stateCounts.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {stateCounts.map((s) => (
+                  <div
+                    key={s.state}
+                    className="flex items-center gap-1.5 rounded-md border bg-card px-2.5 py-1 text-sm"
+                  >
+                    <span className="font-semibold tabular-nums">{s.n}</span>
+                    <StatusPill status={s.state} />
+                  </div>
+                ))}
+              </div>
             )}
-            <Button size="icon-sm" variant="ghost" onClick={remove} disabled={pending}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
+
+            {!hasSteps && (
+              <p className="text-sm text-amber-600 dark:text-amber-400">
+                Add at least one sequence step below before activating.
+              </p>
+            )}
+            {isActive && (
+              <p className="text-xs text-muted-foreground">
+                Campaign is active — pause it to edit the sequence. You can still enroll and review.
+              </p>
+            )}
+            {autoEnroll && (
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium">Evergreen</span> — with auto-enroll on, this campaign
+                stays active and keeps enrolling new matching connections (it won&apos;t
+                auto-complete). Turn auto-enroll off to let it finish.
+              </p>
+            )}
+          </div>
+
+          {/* Right: settings toggles, stacked */}
+          <div className="w-full shrink-0 rounded-lg border lg:w-80">
+            <div className="divide-y">
+              {toggles.map((t) => (
+                <label
+                  key={t.label}
+                  className="flex cursor-pointer items-start justify-between gap-3 px-3 py-2.5"
+                >
+                  <span className="text-sm">
+                    <span className="font-medium">{t.label}</span>
+                    <span className="block text-xs text-muted-foreground">{t.hint}</span>
+                  </span>
+                  <Switch
+                    checked={t.checked}
+                    onCheckedChange={t.onChange}
+                    disabled={pending}
+                    className="mt-0.5 shrink-0"
+                  />
+                </label>
+              ))}
+            </div>
           </div>
         </div>
-
-        {stateCounts.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {stateCounts.map((s) => (
-              <div
-                key={s.state}
-                className="flex items-center gap-1.5 rounded-md border bg-card px-2.5 py-1 text-sm"
-              >
-                <span className="font-semibold tabular-nums">{s.n}</span>
-                <StatusPill status={s.state} />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!hasSteps && (
-          <p className="text-sm text-amber-600 dark:text-amber-400">
-            Add at least one sequence step below before activating.
-          </p>
-        )}
-        {isActive && (
-          <p className="text-xs text-muted-foreground">
-            Campaign is active — pause it to edit the sequence. You can still enroll and review.
-          </p>
-        )}
-        {autoEnroll && (
-          <p className="text-xs text-muted-foreground">
-            <span className="font-medium">Evergreen</span> — with auto-enroll on, this campaign stays
-            active and keeps enrolling new matching connections (it won&apos;t auto-complete). Turn
-            auto-enroll off to let it finish.
-          </p>
-        )}
       </CardContent>
     </Card>
   );
