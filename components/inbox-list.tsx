@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -272,6 +272,13 @@ function ChatDialog({ chat, onClose }: { chat: InboxRow | null; onClose: () => v
   // This component is keyed by chat id, so it mounts fresh per conversation —
   // no need to reset state synchronously inside the effect.
   const [loading, setLoading] = useState(!!chat);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Keep the thread pinned to the newest message: on load and after each reply.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
   useEffect(() => {
     if (!chat) return;
@@ -342,7 +349,7 @@ function ChatDialog({ chat, onClose }: { chat: InboxRow | null; onClose: () => v
               </div>
             </DialogHeader>
 
-            <div className="flex-1 space-y-2 overflow-y-auto bg-muted/20 p-4">
+            <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto bg-muted/20 p-4">
               {loading && messages === null ? (
                 <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading conversation…
