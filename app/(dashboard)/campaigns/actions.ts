@@ -14,6 +14,7 @@ import {
   linkedinAccounts,
 } from "@/db/schema";
 import { enqueueJob } from "@/lib/qstash";
+import { getAccessibleAccountIds } from "@/lib/access";
 import { sendStepNow } from "@/lib/outreach/send";
 import { getIcpMatches } from "@/lib/data-connections";
 import { enrollConnections } from "@/app/(dashboard)/connections/actions";
@@ -95,8 +96,20 @@ export async function deleteStep(stepId: string, campaignId: string): Promise<vo
 
 export async function deleteCampaign(id: string): Promise<void> {
   const user = await requireUser();
-  if (user.role !== "admin") throw new Error("Only admins can delete campaigns");
-  await db.delete(campaigns).where(eq(campaigns.id, id));
+  const [camp] = await db
+    .select({ accountId: campaigns.accountId })
+    .from(campaigns)
+    .where(eq(campaigns.id, id))
+    .limit(1);
+  if (camp) {
+    // Admins can delete any campaign; members only ones on accounts they can
+    // access (the same rule that lets them view the campaign in the first place).
+    const accessibleIds = await getAccessibleAccountIds(user);
+    if (accessibleIds !== null && !accessibleIds.includes(camp.accountId)) {
+      throw new Error("You don't have access to this campaign.");
+    }
+    await db.delete(campaigns).where(eq(campaigns.id, id));
+  }
   revalidatePath("/campaigns");
   redirect("/campaigns");
 }
