@@ -7,10 +7,12 @@ import {
   enrollments,
   campaigns,
   chats,
+  activities,
   webhookEvents,
 } from "@/db/schema";
 import { classifyReply } from "@/lib/ai/generate";
 import { getSettings } from "@/lib/settings";
+import { incrementCounter } from "@/lib/rate-limit";
 import { getAccount, UnipileError } from "@/lib/unipile/client";
 import type { UnipileSourceStatus } from "@/lib/unipile/types";
 
@@ -233,6 +235,40 @@ export async function POST(req: Request) {
               ...(attendeeProviderId ? { attendeeProviderId } : {}),
             },
           });
+      }
+
+      // Outbound message from this account — including ones sent directly in the
+      // LinkedIn app, outside our system. Count it toward the same daily message
+      // cap so automation sees the real total and hard-stops at the limit. Skip
+      // messages our own app already counted at send time (matched by message id).
+      if (!isInbound) {
+        const msgId = body.message_id as string | undefined;
+        const alreadyCounted = msgId
+          ? (
+              await db
+                .select({ id: activities.id })
+                .from(activities)
+                .where(
+                  and(
+                    eq(activities.accountId, account.id),
+                    eq(activities.unipileMessageId, msgId),
+                  ),
+                )
+                .limit(1)
+            ).length > 0
+          : false;
+        if (!alreadyCounted) {
+          await incrementCounter(account.id, "message");
+          await db.insert(activities).values({
+            accountId: account.id,
+            connectionId: conn?.id ?? null,
+            type: "message",
+            status: "success",
+            content: text ?? null,
+            unipileChatId: chatId ?? null,
+            unipileMessageId: msgId ?? null,
+          });
+        }
       }
 
       if (isInbound && conn) {
