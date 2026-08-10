@@ -5,6 +5,7 @@ import { connections, type Connection, type LinkedinAccount, type ConnectionEnri
 import { getProfile } from "@/lib/unipile/client";
 import { incrementCounter, type SendKind } from "@/lib/rate-limit";
 import { pickLatestJob } from "@/lib/icp";
+import { countryFromLocation } from "@/lib/countries";
 
 /** Lowercased searchable blob for enriched ICP keyword matching. */
 export function buildEnrichedText(parts: {
@@ -23,7 +24,7 @@ export function buildEnrichedText(parts: {
 
 /**
  * Enrich one connection via GET /users/{id} and persist the latest job (title,
- * company, description), About summary, country (from primary_locale), the
+ * company, description), About summary, country (name + ISO code from the real
  * searchable `enrichedText`, and provider id. Increments the given daily
  * counter (`enrich` for send-time / lazy, `autoEnrich` for the daily job).
  * Throws on API error so callers can distinguish rate-limits.
@@ -44,8 +45,14 @@ export async function enrichConnectionRow(
   await incrementCounter(account.id, opts.counter);
 
   const { position, company, description } = pickLatestJob(profile.work_experience ?? []);
+  // Real location comes from profile.location (a free-text string like
+  // "Bengaluru, Karnataka, India"), NOT primary_locale (that's the UI locale,
+  // ~always "US" for English LinkedIn). Derive both the country name + ISO code.
+  const rawLocation = profile.location ?? null;
+  const country = countryFromLocation(rawLocation);
   const enrichment: ConnectionEnrichment = {
     summary: profile.summary ?? null,
+    location: rawLocation,
     workExperience: (profile.work_experience ?? []).slice(0, 6).map((e) => ({
       position: e.position ?? null,
       company: e.company ?? null,
@@ -70,7 +77,8 @@ export async function enrichConnectionRow(
       providerId: profile.provider_id ?? conn.providerId,
       company: nextCompany,
       position: nextPosition,
-      locationCountry: profile.primary_locale?.country ?? conn.locationCountry,
+      locationCountry: country?.name ?? null,
+      locationCountryCode: country?.code ?? null,
       enrichment,
       enrichedText,
       enrichedAt: new Date(),

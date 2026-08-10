@@ -235,7 +235,8 @@ export const connections = pgTable(
     // Populated during enrichment.
     providerId: text("provider_id"),
     // Enrichment (from /users/{id})
-    locationCountry: text("location_country"),
+    locationCountry: text("location_country"), // full country name (from profile.location)
+    locationCountryCode: text("location_country_code"), // ISO2 code derived from the name
     company: text("company"),
     position: text("position"),
     enrichment: jsonb("enrichment").$type<ConnectionEnrichment | null>(),
@@ -267,6 +268,7 @@ export const connections = pgTable(
 
 export type ConnectionEnrichment = {
   summary?: string | null;
+  location?: string | null; // raw LinkedIn location string (e.g. "Bengaluru, Karnataka, India")
   workExperience?: Array<{
     position?: string | null;
     company?: string | null;

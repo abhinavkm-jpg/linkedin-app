@@ -18,6 +18,7 @@ import {
 } from "drizzle-orm";
 import { db } from "@/db";
 import { connections, enrollments, type Connection, type CampaignTargeting } from "@/db/schema";
+import { toCode } from "@/lib/countries";
 import { accountScope } from "@/lib/access";
 
 export interface ConnectionFilters {
@@ -147,17 +148,22 @@ export async function getIcpMatches(
     if (kwClause) clauses.push(kwClause);
   }
 
-  const countries = (targeting.countries ?? []).filter(Boolean);
-  if (countries.length > 0) {
+  // Match by ISO code (targeting may hold names, codes, or variants).
+  const countryCodes = [
+    ...new Set(
+      (targeting.countries ?? []).map((c) => toCode(c)).filter((x): x is string => !!x),
+    ),
+  ];
+  if (countryCodes.length > 0) {
     if (opts.strict) {
-      // Verified: country must match and the row must be enriched.
-      clauses.push(inArray(connections.locationCountry, countries));
+      // Verified: country code must match and the row must be enriched.
+      clauses.push(inArray(connections.locationCountryCode, countryCodes));
       clauses.push(isNotNull(connections.enrichedAt));
     } else {
       // Candidate: match if country matches OR the row isn't enriched yet
       // (country unknown → give it the benefit of the doubt, verify later).
       const countryClause = or(
-        inArray(connections.locationCountry, countries),
+        inArray(connections.locationCountryCode, countryCodes),
         isNull(connections.enrichedAt),
       );
       if (countryClause) clauses.push(countryClause);

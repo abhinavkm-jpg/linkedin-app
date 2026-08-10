@@ -3,12 +3,13 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ChipMultiSelect } from "@/components/chip-multiselect";
 import { updateCampaign } from "@/app/(dashboard)/campaigns/actions";
+import { COUNTRIES, nameForCode, toCode } from "@/lib/countries";
 import type { CampaignTargeting } from "@/db/schema";
 
 const TITLE_PRESETS = [
@@ -35,7 +36,49 @@ const TITLE_PRESETS = [
   "GTM",
 ];
 
-const COUNTRY_PRESETS = ["US", "GB", "UK", "SG", "IL", "CA", "AU"];
+/** Canonical country multi-select. Value is a list of ISO2 codes; labels show names. */
+function CountryPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const selected = new Set(value);
+  const available = COUNTRIES.filter((c) => !selected.has(c.code));
+  return (
+    <div className="space-y-2">
+      <select
+        className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+        value=""
+        onChange={(e) => {
+          if (e.target.value) onChange([...value, e.target.value]);
+        }}
+      >
+        <option value="">Add a country…</option>
+        {available.map((c) => (
+          <option key={c.code} value={c.code}>
+            {c.name} ({c.code})
+          </option>
+        ))}
+      </select>
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {value.map((code) => (
+            <span
+              key={code}
+              className="inline-flex items-center gap-1 rounded-full border bg-muted px-2.5 py-1 text-xs font-medium"
+            >
+              {nameForCode(code) ?? code}
+              <button
+                type="button"
+                onClick={() => onChange(value.filter((x) => x !== code))}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label={`Remove ${nameForCode(code) ?? code}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function IcpEditor({
   campaignId,
@@ -52,7 +95,10 @@ export function IcpEditor({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [titleKeywords, setTitleKeywords] = useState<string[]>(targeting.titleKeywords ?? []);
-  const [countries, setCountries] = useState<string[]>(targeting.countries ?? []);
+  // Normalize any legacy name-based targeting ("United States") to ISO codes.
+  const [countries, setCountries] = useState<string[]>(() => [
+    ...new Set((targeting.countries ?? []).map((c) => toCode(c)).filter((x): x is string => !!x)),
+  ]);
   const [tags, setTags] = useState<string[]>(targeting.tags ?? []);
 
   function save() {
@@ -87,14 +133,10 @@ export function IcpEditor({
 
         <div className="space-y-1.5">
           <Label>Countries</Label>
-          <ChipMultiSelect
-            value={countries}
-            onChange={setCountries}
-            presets={COUNTRY_PRESETS}
-            placeholder="Add a country code (e.g. US)…"
-          />
+          <CountryPicker value={countries} onChange={setCountries} />
           <p className="text-xs text-muted-foreground">
-            Country filtering only applies to enriched connections (LinkedIn caps profile lookups).
+            Country is matched by the connection&apos;s real location, and only applies to enriched
+            connections (LinkedIn caps profile lookups).
           </p>
         </div>
 

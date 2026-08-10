@@ -1,4 +1,5 @@
 import type { Connection, CampaignTargeting } from "@/db/schema";
+import { toCode } from "@/lib/countries";
 
 /** Pick the connection's current role (else the most recent) from work experience. */
 export function pickLatestJob(
@@ -23,7 +24,10 @@ export function pickLatestJob(
  * (no keywords, countries, or tags) means "no ICP defined" → always matches.
  */
 export function connectionMatchesIcp(
-  conn: Pick<Connection, "headline" | "position" | "locationCountry" | "tags" | "enrichedText">,
+  conn: Pick<
+    Connection,
+    "headline" | "position" | "locationCountry" | "locationCountryCode" | "tags" | "enrichedText"
+  >,
   targeting: CampaignTargeting,
 ): boolean {
   const keywords = (targeting.titleKeywords ?? []).map((k) => k.trim().toLowerCase()).filter(Boolean);
@@ -42,7 +46,11 @@ export function connectionMatchesIcp(
   }
 
   if (countries.length > 0) {
-    if (!conn.locationCountry || !countries.includes(conn.locationCountry)) return false;
+    // Match on ISO code so names/codes/casing can't diverge. Prefer the stored
+    // code, fall back to deriving it from the name (legacy rows).
+    const targetCodes = new Set(countries.map((c) => toCode(c)).filter(Boolean));
+    const connCode = conn.locationCountryCode ?? toCode(conn.locationCountry);
+    if (!connCode || !targetCodes.has(connCode)) return false;
   }
 
   if (tags.length > 0) {
