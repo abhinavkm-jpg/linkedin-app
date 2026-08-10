@@ -409,7 +409,8 @@ function ChatDialog({ chat, onClose }: { chat: InboxRow | null; onClose: () => v
         toast.error(res.error);
         return;
       }
-      toast.success("Reply sent");
+      if (res.warning) toast.warning(res.warning);
+      else toast.success("Reply sent");
       setText("");
       const thread = await getChatThread(chat.id);
       if (!thread.error) setMessages(thread.messages ?? []);

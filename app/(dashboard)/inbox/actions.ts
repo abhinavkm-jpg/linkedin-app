@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { chats, linkedinAccounts, activities } from "@/db/schema";
 import { sendMessage, listMessages, UnipileError } from "@/lib/unipile/client";
+import { incrementCounter } from "@/lib/rate-limit";
 
 async function requireUser() {
   const session = await auth();
@@ -46,7 +47,10 @@ export async function getChatThread(
   }
 }
 
-export async function sendReply(chatId: string, text: string): Promise<{ error?: string }> {
+export async function sendReply(
+  chatId: string,
+  text: string,
+): Promise<{ error?: string; warning?: string }> {
   await requireUser();
   if (!text.trim()) return { error: "Message is empty" };
 
@@ -78,7 +82,15 @@ export async function sendReply(chatId: string, text: string): Promise<{ error?:
       unipileChatId: chat.unipileChatId,
       unipileMessageId: res.message_id ?? res.id ?? null,
     });
+    // Manual replies count toward the same daily message cap as automated sends,
+    // so the automation sees the real total and backs off near the limit.
+    const used = await incrementCounter(account.id, "message");
     revalidatePath("/inbox");
+    if (used >= account.dailyMessageCap) {
+      return {
+        warning: `Sent — this account has now hit today's message limit (${account.dailyMessageCap}). Automated sending is paused until tomorrow.`,
+      };
+    }
     return {};
   } catch (e) {
     if (e instanceof UnipileError) return { error: `Unipile ${e.status}` };
