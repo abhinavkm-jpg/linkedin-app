@@ -97,10 +97,49 @@ export function nameForCode(code?: string | null): string | null {
   return NAME_BY_CODE.get(code.trim().toUpperCase()) ?? code;
 }
 
+// US states + DC (LinkedIn often writes a metro with the state but no country,
+// e.g. "Austin, Texas Metropolitan Area").
+const US_STATES = new Set([
+  "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut",
+  "delaware", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa",
+  "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan",
+  "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada", "new hampshire",
+  "new jersey", "new mexico", "new york", "north carolina", "north dakota", "ohio",
+  "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina", "south dakota",
+  "tennessee", "texas", "utah", "vermont", "virginia", "washington", "west virginia",
+  "wisconsin", "wyoming", "district of columbia",
+]);
+
+// Known LinkedIn "region" strings that carry no country segment → ISO code.
+const REGION_TO_CODE: Record<string, string> = {
+  "san francisco bay area": "US", "new york city metropolitan area": "US", "greater boston": "US",
+  "greater chicago area": "US", "los angeles metropolitan area": "US", "greater seattle area": "US",
+  "washington dc-baltimore area": "US", "greater philadelphia": "US", "dallas-fort worth metroplex": "US",
+  "atlanta metropolitan area": "US", "greater houston": "US", "miami-fort lauderdale area": "US",
+  "denver metropolitan area": "US", "salt lake city metropolitan area": "US", "detroit metropolitan area": "US",
+  "greater minneapolis-st. paul area": "US", "greater phoenix area": "US", "san diego metropolitan area": "US",
+  "greater tampa bay area": "US", "greater sacramento": "US", "kansas city metropolitan area": "US",
+  "nashville metropolitan area": "US", "greater pittsburgh region": "US", "cincinnati metropolitan area": "US",
+  "greater orlando": "US", "las vegas metropolitan area": "US", "greater st. louis": "US",
+  "greater indianapolis": "US", "greater milwaukee": "US", "buffalo-niagara falls area": "US",
+  "greater new orleans region": "US", "raleigh-durham-chapel hill area": "US", "greater richmond region": "US",
+  "greater toronto area": "CA", "greater montreal metropolitan area": "CA", "greater vancouver metropolitan area": "CA",
+  "greater ottawa metropolitan area": "CA", "greater calgary metropolitan area": "CA", "greater edmonton metropolitan area": "CA",
+  "greater sydney area": "AU", "greater melbourne area": "AU", "greater brisbane area": "AU",
+  "greater perth area": "AU", "greater adelaide area": "AU",
+  "greater london": "GB", "greater manchester": "GB", "greater birmingham": "GB", "greater edinburgh area": "GB",
+  "greater bengaluru area": "IN", "greater delhi area": "IN", "greater hyderabad area": "IN",
+  "greater mumbai": "IN", "greater chennai area": "IN", "greater kolkata area": "IN",
+  "greater ahmedabad area": "IN", "greater pune area": "IN",
+};
+
+const METRO_MARKER = /\b(area|metro|metroplex|metropolitan|region)\b/;
+
 /**
- * Extract the country from a LinkedIn location string. Takes the last
- * comma-separated segment (the country) and maps it to a canonical entry.
- * Returns null when there's no recognizable country (e.g. "San Francisco Bay Area").
+ * Extract the country from a LinkedIn location string. Prefers the country
+ * segment ("City, Region, Country"); falls back to well-known region strings
+ * and US-state metros ("Austin, Texas Metropolitan Area"). Returns null when
+ * there's no recognizable country.
  */
 export function countryFromLocation(
   location?: string | null,
@@ -112,12 +151,28 @@ export function countryFromLocation(
     .filter(Boolean);
   if (segments.length === 0) return null;
 
-  // Try each segment from the end — the country is usually last, but be lenient.
+  // 1) Explicit country segment (usually last).
   for (let i = segments.length - 1; i >= 0; i--) {
     const code = toCode(segments[i]);
     if (code) return { name: nameForCode(code)!, code };
   }
-  // No known country: keep the last segment as the name, code unknown.
-  const last = segments[segments.length - 1];
-  return { name: last, code: null };
+
+  const lower = location.toLowerCase().trim();
+
+  // 2) Known metro/region string with no country segment.
+  if (REGION_TO_CODE[lower]) {
+    const code = REGION_TO_CODE[lower];
+    return { name: nameForCode(code)!, code };
+  }
+
+  // 3) A US state named inside a metro string ("…, Texas Metropolitan Area").
+  //    Gated on a metro marker so "Tbilisi, Georgia" (the country) isn't caught.
+  if (METRO_MARKER.test(lower)) {
+    for (const st of US_STATES) {
+      if (lower.includes(st)) return { name: "United States", code: "US" };
+    }
+  }
+
+  // Unknown country: keep the last segment as the name, code null.
+  return { name: segments[segments.length - 1], code: null };
 }
