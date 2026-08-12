@@ -44,6 +44,7 @@ export async function POST(req: Request) {
         excludeCampaignId: camp.id,
         idLimit: AUTO_ENROLL_BATCH,
         dedupe: true, // always add only NEW people, regardless of multi-DM setting
+        strict: true, // only enroll verified country matches (title-only ICPs unaffected)
       });
       if (ids.length === 0) continue;
       const res = await enrollConnectionIds(camp, ids, { dedupe: true });

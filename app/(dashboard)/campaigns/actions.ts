@@ -216,6 +216,9 @@ export async function enrollMatchingIcp(
     excludeCampaignId: campaignId,
     idLimit: 1000,
     dedupe: camp.dedupeContacts,
+    // Only enroll connections whose real country is known AND matches (no
+    // benefit-of-the-doubt) — title-only ICPs are unaffected.
+    strict: true,
   });
   if (ids.length === 0) return { enrolled: 0, skipped: 0, matched: count };
 

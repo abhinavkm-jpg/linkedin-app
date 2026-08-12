@@ -155,9 +155,10 @@ export function IcpEditor({
       <p className="text-sm text-muted-foreground">
         Who this campaign targets. Leave everything empty to target your whole network on this
         account. Title keywords match a connection&apos;s headline, role, job description, company
-        &amp; About. <span className="font-medium">Country is verified as each connection gets
-        enriched</span> — everyone matching by title enters the pipeline, then only true matches are
-        messaged.
+        &amp; About. When you set countries,{" "}
+        <span className="font-medium">only connections whose real country is confirmed to match are
+        enrolled</span> — country fills in gradually as profiles get enriched, so the count climbs
+        over time.
       </p>
       <div className="space-y-5">
         <div className="space-y-1.5">
