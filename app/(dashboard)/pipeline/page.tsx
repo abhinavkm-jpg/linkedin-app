@@ -1,9 +1,16 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { PipelineBoard, type PipelineRow } from "@/components/pipeline-panel";
 import { db } from "@/db";
-import { pipelineItems, connections, linkedinAccounts, chats } from "@/db/schema";
+import {
+  pipelineItems,
+  connections,
+  linkedinAccounts,
+  chats,
+  replyDrafts,
+  type ConnectionEnrichment,
+} from "@/db/schema";
 import { auth } from "@/auth";
 import { getAccessibleAccountIds, accountScope } from "@/lib/access";
 import { getPipelineStages, type StageConfig } from "@/app/(dashboard)/pipeline/actions";
@@ -38,13 +45,19 @@ export default async function PipelinePage() {
         country: connections.locationCountry,
         publicIdentifier: connections.publicIdentifier,
         publicProfileUrl: connections.publicProfileUrl,
+        enrichment: connections.enrichment,
         accountName: linkedinAccounts.name,
         chatInternalId: chats.id,
+        draftText: replyDrafts.draftText,
       })
       .from(pipelineItems)
       .leftJoin(connections, eq(pipelineItems.connectionId, connections.id))
       .leftJoin(linkedinAccounts, eq(pipelineItems.accountId, linkedinAccounts.id))
       .leftJoin(chats, eq(chats.unipileChatId, pipelineItems.chatId))
+      .leftJoin(
+        replyDrafts,
+        and(eq(replyDrafts.pipelineItemId, pipelineItems.id), eq(replyDrafts.status, "pending")),
+      )
       .where(accountScope(pipelineItems.accountId, accessibleIds))
       .orderBy(desc(pipelineItems.updatedAt))
       .limit(500);
@@ -67,7 +80,13 @@ export default async function PipelinePage() {
       profileUrl:
         i.publicProfileUrl ??
         (i.publicIdentifier ? `https://www.linkedin.com/in/${i.publicIdentifier}` : null),
+      summary: (i.enrichment as ConnectionEnrichment | null)?.summary ?? null,
+      experience: ((i.enrichment as ConnectionEnrichment | null)?.workExperience ?? [])
+        .slice(0, 5)
+        .map((e) => ({ position: e.position ?? null, company: e.company ?? null }))
+        .filter((e) => e.position || e.company),
       chatInternalId: i.chatInternalId,
+      draftText: i.draftText ?? null,
     }));
 
     accounts = await db

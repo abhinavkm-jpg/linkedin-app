@@ -20,9 +20,12 @@ import {
   CalendarCheck,
   Trophy,
   ExternalLink,
+  Sparkles,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -43,7 +46,7 @@ import {
   setPipelineStageHidden,
   type StageConfig,
 } from "@/app/(dashboard)/pipeline/actions";
-import { getChatThread, type ThreadMessage } from "@/app/(dashboard)/inbox/actions";
+import { getChatThread, sendReply, type ThreadMessage } from "@/app/(dashboard)/inbox/actions";
 
 export type PipelineRow = {
   id: string;
@@ -61,7 +64,10 @@ export type PipelineRow = {
   lastOutboundText: string | null;
   updatedAt: string | null;
   profileUrl: string | null;
+  summary: string | null;
+  experience: { position: string | null; company: string | null }[];
   chatInternalId: string | null;
+  draftText: string | null;
 };
 
 function initials(name: string) {
@@ -334,6 +340,8 @@ function LeadDetailDialog({
   // Keyed by row id in the parent, so this mounts fresh per lead — no need to
   // reset state synchronously inside the effect.
   const [messages, setMessages] = useState<ThreadMessage[] | null>(null);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
   const [, start] = useTransition();
   const chatId = row?.chatInternalId ?? null;
 
@@ -357,12 +365,38 @@ function LeadDetailDialog({
     { label: "Country", value: row.country },
     { label: "Account", value: row.accountName },
     { label: "Intent", value: intentLabel(row.intent) },
-    { label: "Replied", value: row.lastInboundAt ? formatDistanceToNow(new Date(row.lastInboundAt), { addSuffix: true }) : null },
+    {
+      label: "Replied",
+      value: row.lastInboundAt
+        ? formatDistanceToNow(new Date(row.lastInboundAt), { addSuffix: true })
+        : null,
+    },
   ];
+
+  function reply() {
+    if (!chatId || !text.trim() || !row) return;
+    setSending(true);
+    sendReply(chatId, text)
+      .then((res) => {
+        if (res.error) {
+          toast.error(res.error);
+          return;
+        }
+        if (res.warning) toast.warning(res.warning);
+        else toast.success(`Reply sent to ${row.name}`);
+        setText("");
+        getChatThread(chatId).then((t) => setMessages(t.messages ?? []));
+        onChanged();
+      })
+      .finally(() => setSending(false));
+  }
 
   return (
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent showCloseButton className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent
+        showCloseButton
+        className="max-h-[90vh] overflow-y-auto overflow-x-hidden sm:max-w-3xl"
+      >
         <DialogHeader className="flex-row items-start gap-3 space-y-0 pr-8">
           <Avatar className="h-11 w-11 shrink-0">
             <AvatarFallback className="bg-primary/10 font-medium text-primary">
@@ -397,12 +431,36 @@ function LeadDetailDialog({
           {info
             .filter((i) => i.value)
             .map((i) => (
-              <div key={i.label} className="rounded-md border bg-muted/20 px-3 py-2">
+              <div key={i.label} className="min-w-0 rounded-md border bg-muted/20 px-3 py-2">
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{i.label}</p>
                 <p className="truncate text-sm">{i.value}</p>
               </div>
             ))}
         </div>
+
+        {/* Enriched profile */}
+        {row.summary && (
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">About</p>
+            <p className="whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 text-sm">
+              {row.summary}
+            </p>
+          </div>
+        )}
+        {row.experience.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Experience
+            </p>
+            <ul className="space-y-1 rounded-md border bg-muted/20 p-3 text-sm">
+              {row.experience.map((e, i) => (
+                <li key={i} className="truncate">
+                  {[e.position, e.company].filter(Boolean).join(" at ")}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Stage control */}
         <div className="flex flex-wrap items-center gap-2">
@@ -410,7 +468,12 @@ function LeadDetailDialog({
           <select
             className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
             value={row.stage}
-            onChange={(e) => start(async () => { await setPipelineStage(row.id, e.target.value); onChanged(); })}
+            onChange={(e) =>
+              start(async () => {
+                await setPipelineStage(row.id, e.target.value);
+                onChanged();
+              })
+            }
           >
             {stages.map((s) => (
               <option key={s.value} value={s.value}>
@@ -418,16 +481,6 @@ function LeadDetailDialog({
               </option>
             ))}
           </select>
-          {chatId && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="ml-auto"
-              render={<Link href={`/inbox?c=${chatId}`} />}
-            >
-              <MessageSquare className="h-4 w-4" /> Reply in Inbox
-            </Button>
-          )}
         </div>
 
         {/* Conversation */}
@@ -445,7 +498,7 @@ function LeadDetailDialog({
                 <div key={m.id} className={cn("flex", m.mine ? "justify-end" : "justify-start")}>
                   <div
                     className={cn(
-                      "max-w-[80%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm",
+                      "max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm shadow-sm",
                       m.mine
                         ? "rounded-br-sm bg-primary text-primary-foreground"
                         : "rounded-bl-sm bg-card ring-1 ring-border",
@@ -460,6 +513,35 @@ function LeadDetailDialog({
                 {chatId ? "No messages to show." : "No chat linked yet."}
               </p>
             )}
+          </div>
+        </div>
+
+        {/* Reply here (resolves the AI draft + drops it from "Needs you") */}
+        <div className="space-y-2 border-t pt-3">
+          {row.draftText && (
+            <button
+              type="button"
+              onClick={() => setText(row.draftText ?? "")}
+              className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+            >
+              <Sparkles className="h-3.5 w-3.5" /> Use AI reply
+            </button>
+          )}
+          <div className="flex items-end gap-2">
+            <Textarea
+              rows={3}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              disabled={!chatId}
+              placeholder={
+                chatId ? `Reply to ${row.name.split(" ")[0] ?? ""}…` : "No chat linked — can't reply here"
+              }
+              className="resize-none bg-background"
+            />
+            <Button size="sm" onClick={reply} disabled={sending || !chatId || !text.trim()}>
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Send
+            </Button>
           </div>
         </div>
       </DialogContent>
