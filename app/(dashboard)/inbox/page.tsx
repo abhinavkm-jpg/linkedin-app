@@ -1,9 +1,9 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { InboxList, type InboxRow } from "@/components/inbox-list";
 import { db } from "@/db";
-import { chats, connections, linkedinAccounts } from "@/db/schema";
+import { chats, connections, linkedinAccounts, replyDrafts } from "@/db/schema";
 import { auth } from "@/auth";
 import { getAccessibleAccountIds, accountScope } from "@/lib/access";
 
@@ -38,10 +38,16 @@ export default async function InboxPage() {
         avatarUrl: connections.profilePictureUrl,
         publicIdentifier: connections.publicIdentifier,
         publicProfileUrl: connections.publicProfileUrl,
+        draftId: replyDrafts.id,
+        draftText: replyDrafts.draftText,
       })
       .from(chats)
       .leftJoin(linkedinAccounts, eq(chats.accountId, linkedinAccounts.id))
       .leftJoin(connections, eq(chats.connectionId, connections.id))
+      .leftJoin(
+        replyDrafts,
+        and(eq(replyDrafts.connectionId, chats.connectionId), eq(replyDrafts.status, "pending")),
+      )
       .where(accountScope(chats.accountId, accessibleIds))
       .orderBy(desc(chats.lastMessageAt))
       .limit(200);
@@ -60,6 +66,8 @@ export default async function InboxPage() {
         aiDecision: c.aiDecision,
         aiReason: c.aiReason,
         accountName: c.accountName,
+        draftId: c.draftId ?? null,
+        draftText: c.draftText ?? null,
       };
     });
   } catch (e) {

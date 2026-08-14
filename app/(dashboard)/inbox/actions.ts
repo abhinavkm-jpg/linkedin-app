@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { chats, linkedinAccounts, activities } from "@/db/schema";
+import { chats, linkedinAccounts, activities, replyDrafts, pipelineItems } from "@/db/schema";
 import { sendMessage, listMessages, UnipileError } from "@/lib/unipile/client";
 import { incrementCounter } from "@/lib/rate-limit";
 
@@ -85,7 +85,24 @@ export async function sendReply(
     // Manual replies count toward the same daily message cap as automated sends,
     // so the automation sees the real total and backs off near the limit.
     const used = await incrementCounter(account.id, "message");
+
+    // Resolve any pending AI reply draft for this person (leaves "Needs you")
+    // and advance the pipeline item's last-outbound.
+    if (chat.connectionId) {
+      await db
+        .update(replyDrafts)
+        .set({ status: "sent", editedText: text, sentAt: new Date() })
+        .where(
+          and(eq(replyDrafts.connectionId, chat.connectionId), eq(replyDrafts.status, "pending")),
+        );
+      await db
+        .update(pipelineItems)
+        .set({ lastOutboundText: text, lastOutboundAt: new Date(), updatedAt: new Date() })
+        .where(eq(pipelineItems.connectionId, chat.connectionId));
+    }
+
     revalidatePath("/inbox");
+    revalidatePath("/pipeline");
     if (used >= account.dailyMessageCap) {
       return {
         warning: `Sent — this account has now hit today's message limit (${account.dailyMessageCap}). Automated sending is paused until tomorrow.`,

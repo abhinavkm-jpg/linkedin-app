@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -13,6 +13,7 @@ import {
   Search,
   List,
   LayoutGrid,
+  Sparkles,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
@@ -46,6 +47,8 @@ export interface InboxRow {
   aiDecision: string | null;
   aiReason: string | null;
   accountName: string | null;
+  draftId: string | null;
+  draftText: string | null;
 }
 
 /** Small transparency note showing the AI reply-triage decision + reason. */
@@ -84,7 +87,11 @@ type View = "list" | "grid";
 
 export function InboxList({ chats }: { chats: InboxRow[] }) {
   const router = useRouter();
-  const [active, setActive] = useState<InboxRow | null>(null);
+  const searchParams = useSearchParams();
+  // Deep link from the Pipeline board: /inbox?c=<chatId> opens that chat.
+  const [active, setActive] = useState<InboxRow | null>(
+    () => chats.find((c) => c.id === searchParams.get("c")) ?? null,
+  );
   const [, startRead] = useTransition();
   const [query, setQuery] = useState("");
   const [account, setAccount] = useState("");
@@ -96,14 +103,15 @@ export function InboxList({ chats }: { chats: InboxRow[] }) {
     [chats],
   );
   const unreadTotal = chats.reduce((n, c) => n + (c.unreadCount > 0 ? 1 : 0), 0);
-  const handoffTotal = chats.reduce((n, c) => n + (c.aiDecision === "handoff" ? 1 : 0), 0);
+  // "Needs you" = a conversation with an AI reply draft waiting to be reviewed.
+  const needsTotal = chats.reduce((n, c) => n + (c.draftText ? 1 : 0), 0);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return chats.filter((c) => {
       if (account && c.accountName !== account) return false;
       if (tab === "unread" && c.unreadCount === 0) return false;
-      if (tab === "handoff" && c.aiDecision !== "handoff") return false;
+      if (tab === "handoff" && !c.draftText) return false;
       if (q) {
         const hay = `${c.name} ${c.headline ?? ""} ${c.lastMessageText ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -165,9 +173,9 @@ export function InboxList({ chats }: { chats: InboxRow[] }) {
           <TabButton active={tab === "unread"} onClick={() => setTab("unread")}>
             Unread{unreadTotal > 0 ? ` (${unreadTotal})` : ""}
           </TabButton>
-          {handoffTotal > 0 && (
+          {needsTotal > 0 && (
             <TabButton active={tab === "handoff"} onClick={() => setTab("handoff")}>
-              Needs you ({handoffTotal})
+              Needs you ({needsTotal})
             </TabButton>
           )}
         </div>
@@ -370,6 +378,7 @@ function ChatGridCard({ chat, onOpen }: { chat: InboxRow; onOpen: () => void }) 
 }
 
 function ChatDialog({ chat, onClose }: { chat: InboxRow | null; onClose: () => void }) {
+  const router = useRouter();
   const [text, setText] = useState("");
   const [pending, start] = useTransition();
   const [messages, setMessages] = useState<ThreadMessage[] | null>(null);
@@ -414,6 +423,8 @@ function ChatDialog({ chat, onClose }: { chat: InboxRow | null; onClose: () => v
       setText("");
       const thread = await getChatThread(chat.id);
       if (!thread.error) setMessages(thread.messages ?? []);
+      // Refresh so the resolved draft leaves the "Needs you" tab.
+      router.refresh();
     });
   }
 
@@ -491,24 +502,41 @@ function ChatDialog({ chat, onClose }: { chat: InboxRow | null; onClose: () => v
               )}
             </div>
 
-            <div className="flex items-end gap-2 border-t p-3">
-              <Textarea
-                rows={2}
-                placeholder={`Reply to ${chat.name.split(" ")[0] ?? ""}…`}
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                    e.preventDefault();
-                    if (text.trim()) reply();
-                  }
-                }}
-                className="resize-none bg-background"
-              />
-              <Button size="sm" onClick={reply} disabled={pending || !text.trim()}>
-                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Send
-              </Button>
+            <div className="space-y-2 border-t p-3">
+              {chat.draftText && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setText(chat.draftText ?? "")}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                    title="Insert the AI-drafted reply into the box"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" /> Use AI reply
+                  </button>
+                  <span className="text-xs text-muted-foreground">
+                    Review or edit before sending.
+                  </span>
+                </div>
+              )}
+              <div className="flex items-end gap-2">
+                <Textarea
+                  rows={2}
+                  placeholder={`Reply to ${chat.name.split(" ")[0] ?? ""}…`}
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      if (text.trim()) reply();
+                    }
+                  }}
+                  className="resize-none bg-background"
+                />
+                <Button size="sm" onClick={reply} disabled={pending || !text.trim()}>
+                  {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Send
+                </Button>
+              </div>
             </div>
           </>
         )}
