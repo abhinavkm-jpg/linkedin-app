@@ -13,6 +13,7 @@ import {
 import { classifyReply } from "@/lib/ai/generate";
 import { getSettings } from "@/lib/settings";
 import { incrementCounter } from "@/lib/rate-limit";
+import { refreshPipelineForReply } from "@/lib/outreach/pipeline";
 import { getAccount, UnipileError } from "@/lib/unipile/client";
 import type { UnipileSourceStatus } from "@/lib/unipile/types";
 
@@ -318,6 +319,19 @@ export async function POST(req: Request) {
             .update(connections)
             .set({ relationshipStatus: "replied" })
             .where(eq(connections.id, conn.id));
+
+          // Additive: enter the reply pipeline + draft a next reply (PENDING,
+          // never sent). Must never break the webhook, so it's isolated.
+          try {
+            await refreshPipelineForReply({
+              account,
+              conn,
+              chatId: chatId ?? null,
+              inboundText: text ?? null,
+            });
+          } catch (err) {
+            console.error("[webhook] pipeline draft failed", err);
+          }
         }
       }
       return NextResponse.json({ ok: true });

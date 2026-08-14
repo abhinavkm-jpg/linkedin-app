@@ -486,6 +486,76 @@ export const chats = pgTable(
   (t) => [index("chats_account_idx").on(t.accountId)],
 );
 
+/* -------------------------------------------------------------------------- */
+/* Reply pipeline (people who respond to outbound)                             */
+/* -------------------------------------------------------------------------- */
+
+/** One row per (account, connection) that has entered the reply pipeline. */
+export const pipelineItems = pgTable(
+  "pipeline_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => linkedinAccounts.id, { onDelete: "cascade" }),
+    connectionId: uuid("connection_id")
+      .notNull()
+      .references(() => connections.id, { onDelete: "cascade" }),
+    chatId: text("chat_id"), // Unipile chat id (for pulling history + sending)
+    // See lib/pipeline.ts for the vocabulary; stored as text (human-overridable).
+    stage: text("stage").notNull().default("new_response"),
+    intent: text("intent"),
+    lastInboundText: text("last_inbound_text"),
+    lastInboundAt: timestamp("last_inbound_at", { withTimezone: true }),
+    lastOutboundText: text("last_outbound_text"),
+    lastOutboundAt: timestamp("last_outbound_at", { withTimezone: true }),
+    meetingStatus: text("meeting_status").notNull().default("none"),
+    outcome: text("outcome"), // "won" | "lost" | null
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("pipeline_items_account_connection_idx").on(t.accountId, t.connectionId),
+    index("pipeline_items_account_idx").on(t.accountId),
+  ],
+);
+
+export type PipelineItem = typeof pipelineItems.$inferSelect;
+
+/** AI-generated reply drafts (and follow-up history). Inert until a human sends. */
+export const replyDrafts = pgTable(
+  "reply_drafts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pipelineItemId: uuid("pipeline_item_id")
+      .notNull()
+      .references(() => pipelineItems.id, { onDelete: "cascade" }),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => linkedinAccounts.id, { onDelete: "cascade" }),
+    connectionId: uuid("connection_id").references(() => connections.id, { onDelete: "set null" }),
+    chatId: text("chat_id"),
+    stageAtDraft: text("stage_at_draft"),
+    intent: text("intent"),
+    objective: text("objective"),
+    draftText: text("draft_text"),
+    reason: text("reason"),
+    suggestedStage: text("suggested_stage"),
+    // "pending" | "sent" | "rejected" | "superseded"
+    status: text("status").notNull().default("pending"),
+    editedText: text("edited_text"),
+    unipileMessageId: text("unipile_message_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("reply_drafts_item_idx").on(t.pipelineItemId),
+    index("reply_drafts_status_idx").on(t.status),
+  ],
+);
+
+export type ReplyDraft = typeof replyDrafts.$inferSelect;
+
 export const webhookEvents = pgTable(
   "webhook_events",
   {

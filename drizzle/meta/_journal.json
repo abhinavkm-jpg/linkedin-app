@@ -92,6 +92,13 @@
       "when": 1786345929199,
       "tag": "0012_daily_puff_adder",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786689626319,
+      "tag": "0013_smooth_shadow_king",
+      "breakpoints": true
     }
   ]
 }

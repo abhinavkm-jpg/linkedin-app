@@ -6,6 +6,7 @@ import { aiPrompts } from "@/db/schema";
 import { DEFAULT_AI_MODEL } from "@/lib/env";
 import { getSettings } from "@/lib/settings";
 import { DEFAULT_SYSTEM_PROMPT, findBannedWords } from "./prompts";
+import { STAGE_VALUES, INTENT_VALUES } from "@/lib/pipeline";
 
 async function client(): Promise<Anthropic> {
   const { anthropicApiKey } = await getSettings();
@@ -320,5 +321,124 @@ export async function classifyReply(
     return { action, reason: (parsed?.reason ?? "").slice(0, 120) };
   } catch {
     return { action: "handoff", reason: "classifier unavailable" };
+  }
+}
+
+const PIPELINE_SYSTEM = `You are a senior B2B sales assistant helping the account holder reply to LinkedIn connections who responded to their outreach. Do all of the following, then return JSON only.
+
+1) CLASSIFY the prospect's latest reply into exactly one intent:
+interested, problem_identified, qualified_opportunity, meeting_ready, question, objection, not_interested, not_relevant, unclear.
+
+2) Choose the sales STAGE the conversation should be in now (given the current stage + their latest reply):
+new_response, engaging, qualifying, meeting_opportunity, meeting_booked, discovery_completed, proposal, negotiation, won, lost.
+
+3) Draft the NEXT reply the account holder should send, following this playbook:
+- Positive but no specific need yet -> continue the conversation: acknowledge, add one relevant value point, ask ONE useful qualifying question. Do NOT push a meeting.
+- They mention a problem / goal / challenge -> acknowledge it, show relevant understanding, ask ONE concise question. Don't pitch everything.
+- Clearly qualified (a real problem we can help with + business relevance) -> transition toward a meeting: connect their situation -> a relevant outcome -> a short call. Make the meeting the logical next step, never a generic "book a demo".
+- Ready to meet -> a concise 15-30 minute invite that explains why it's useful to THEM.
+- Objection -> address it directly and briefly; keep the door open.
+- Not interested / poor fit -> a short, gracious close; do not push.
+- Ignored a prior meeting invite -> a low-pressure follow-up with a new useful reason and an easy yes/no.
+
+MESSAGE RULES: sound human; concise; reference what they actually said; at most ONE question; one clear objective; no generic sales language; no over-enthusiasm; no long paragraphs; never invent facts about the prospect or our company; never include a link unless one was provided; don't repeat what was already discussed.
+
+Return ONLY compact JSON:
+{"intent":"<one intent>","stage":"<one stage>","objective":"<=8 words","reply":"the message text to send","reason":"why this reply, <=20 words"}`;
+
+export interface PipelineDraft {
+  intent: string;
+  suggestedStage: string;
+  objective: string;
+  reply: string;
+  reason: string;
+  bannedWordsFound: string[];
+}
+
+/**
+ * Classify an inbound reply + recommend a sales stage + draft the next reply,
+ * following the pipeline playbook. Always returns a result (safe fallback on
+ * any error) — the caller stores it as a PENDING draft; it is never sent here.
+ */
+export async function draftPipelineReply(opts: {
+  prospect: ProspectContext;
+  priorMessages: Array<{ from: "me" | "them"; text: string }>;
+  currentStage: string;
+  /** Who-we-are / offer context (the account's voice prompt). */
+  voice?: string;
+}): Promise<PipelineDraft> {
+  const fallback: PipelineDraft = {
+    intent: "unclear",
+    suggestedStage: opts.currentStage,
+    objective: "",
+    reply: "",
+    reason: "AI unavailable — write this reply manually",
+    bannedWordsFound: [],
+  };
+  try {
+    const lastInbound = [...opts.priorMessages].reverse().find((m) => m.from === "them")?.text ?? "";
+    const thread = opts.priorMessages
+      .slice(-14)
+      .map((m) => `${m.from === "me" ? "Me" : "Them"}: ${m.text}`)
+      .join("\n");
+    const parts = [
+      `WHO WE ARE / OUR OFFER:\n${opts.voice?.trim() || "A B2B demand-generation and campaign-execution partner."}`,
+      "",
+      `Current stage: ${opts.currentStage}`,
+      "",
+      "Prospect:",
+      buildProspectBlock(opts.prospect),
+      "",
+      "Conversation so far (oldest first):",
+      thread || "(no prior messages captured)",
+      "",
+      `Their latest message: """${lastInbound}"""`,
+      "",
+      "Classify the intent, choose the stage, and draft the next reply as JSON.",
+    ];
+
+    const anthropic = await client();
+    const response = await anthropic.messages.create({
+      model: DEFAULT_AI_MODEL,
+      max_tokens: 1200,
+      output_config: { effort: "medium" },
+      system: PIPELINE_SYSTEM,
+      messages: [{ role: "user", content: parts.join("\n") }],
+    });
+    const txt = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("");
+    const match = txt.match(/\{[\s\S]*\}/);
+    if (!match) return fallback;
+    const parsed = JSON.parse(match[0]) as Partial<{
+      intent: string;
+      stage: string;
+      objective: string;
+      reply: string;
+      reason: string;
+    }>;
+
+    const intent =
+      parsed.intent && INTENT_VALUES.includes(parsed.intent as (typeof INTENT_VALUES)[number])
+        ? parsed.intent
+        : "unclear";
+    const suggestedStage =
+      parsed.stage && STAGE_VALUES.includes(parsed.stage as (typeof STAGE_VALUES)[number])
+        ? parsed.stage
+        : opts.currentStage;
+    // No links are ever supplied to a reply draft, so strip any the model invents.
+    const reply = stripDisallowedUrls((parsed.reply ?? "").trim(), new Set());
+
+    return {
+      intent,
+      suggestedStage,
+      objective: (parsed.objective ?? "").slice(0, 120),
+      reply,
+      reason: (parsed.reason ?? "").slice(0, 200),
+      bannedWordsFound: findBannedWords(reply),
+    };
+  } catch {
+    return fallback;
   }
 }

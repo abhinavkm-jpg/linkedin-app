@@ -8,6 +8,7 @@ import {
   Contact,
   Megaphone,
   Inbox,
+  KanbanSquare,
   FileText,
   Settings,
 } from "lucide-react";
@@ -19,6 +20,7 @@ const items = [
   { href: "/connections", label: "Connections", icon: Contact },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/inbox", label: "Inbox", icon: Inbox },
+  { href: "/pipeline", label: "Pipeline", icon: KanbanSquare },
   { href: "/templates", label: "Templates & AI", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
