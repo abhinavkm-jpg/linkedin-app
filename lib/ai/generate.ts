@@ -368,6 +368,8 @@ export async function draftPipelineReply(opts: {
   voice?: string;
   /** Offer + qualification + how-to-advance context (the account's reply strategy). */
   strategy?: string;
+  /** Their newest inbound message — used as a fallback if history couldn't be fetched. */
+  latestInbound?: string;
 }): Promise<PipelineDraft> {
   const fallback: PipelineDraft = {
     intent: "unclear",
@@ -378,7 +380,10 @@ export async function draftPipelineReply(opts: {
     bannedWordsFound: [],
   };
   try {
-    const lastInbound = [...opts.priorMessages].reverse().find((m) => m.from === "them")?.text ?? "";
+    const lastInbound =
+      opts.latestInbound?.trim() ||
+      [...opts.priorMessages].reverse().find((m) => m.from === "them")?.text ||
+      "";
     const thread = opts.priorMessages
       .slice(-14)
       .map((m) => `${m.from === "me" ? "Me" : "Them"}: ${m.text}`)

@@ -64,9 +64,24 @@ export async function refreshPipelineForReply(opts: {
     experience: conn.enrichment?.workExperience ?? [],
   };
 
+  // Their newest inbound: the passed reply, else the last "them" line in history.
+  const latestFromHistory = [...priorMessages].reverse().find((m) => m.from === "them")?.text ?? null;
+  const latestInbound = inboundText ?? latestFromHistory;
+  // If history couldn't be fetched but we know their message, seed the thread.
+  if (priorMessages.length === 0 && latestInbound) {
+    priorMessages = [{ from: "them", text: latestInbound }];
+  }
+
   const voice = account.defaultPrompt?.trim() || (await getDefaultSystemPrompt());
   const strategy = account.replyStrategy?.trim() || undefined;
-  const draft = await draftPipelineReply({ prospect, priorMessages, currentStage, voice, strategy });
+  const draft = await draftPipelineReply({
+    prospect,
+    priorMessages,
+    currentStage,
+    voice,
+    strategy,
+    latestInbound: latestInbound ?? undefined,
+  });
 
   // Brand-new items adopt the AI-suggested stage; existing items keep their
   // (human-controlled) stage and just refresh intent + last inbound.
@@ -79,7 +94,7 @@ export async function refreshPipelineForReply(opts: {
       .set({
         intent: draft.intent,
         chatId: chatId ?? existing.chatId,
-        lastInboundText: inboundText ?? existing.lastInboundText,
+        lastInboundText: latestInbound ?? existing.lastInboundText,
         lastInboundAt: new Date(),
         updatedAt: new Date(),
       })
@@ -94,7 +109,7 @@ export async function refreshPipelineForReply(opts: {
         chatId,
         stage,
         intent: draft.intent,
-        lastInboundText: inboundText,
+        lastInboundText: latestInbound,
         lastInboundAt: new Date(),
       })
       .onConflictDoNothing({
