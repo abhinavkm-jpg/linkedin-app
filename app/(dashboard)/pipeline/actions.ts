@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import {
   pipelineItems,
+  pipelineStages,
   replyDrafts,
   connections,
   linkedinAccounts,
@@ -16,7 +17,69 @@ import { sendMessage, startChat, getProfile, UnipileError } from "@/lib/unipile/
 import { incrementCounter } from "@/lib/rate-limit";
 import { getAccessibleAccountIds } from "@/lib/access";
 import { refreshPipelineForReply } from "@/lib/outreach/pipeline";
-import { isStage } from "@/lib/pipeline";
+import { STAGES } from "@/lib/pipeline";
+
+export type StageConfig = { value: string; label: string; hidden: boolean; isBase: boolean; position: number };
+
+/** Read configured pipeline stages, seeding the built-in defaults on first use. */
+export async function getPipelineStages(): Promise<StageConfig[]> {
+  await requireUser();
+  let rows = await db.select().from(pipelineStages).orderBy(asc(pipelineStages.position));
+  if (rows.length === 0) {
+    await db
+      .insert(pipelineStages)
+      .values(STAGES.map((s, i) => ({ value: s.value, label: s.label, position: i, isBase: true })))
+      .onConflictDoNothing({ target: pipelineStages.value });
+    rows = await db.select().from(pipelineStages).orderBy(asc(pipelineStages.position));
+  }
+  return rows.map((r) => ({
+    value: r.value,
+    label: r.label,
+    hidden: r.hidden,
+    isBase: r.isBase,
+    position: r.position,
+  }));
+}
+
+export async function addPipelineStage(label: string): Promise<void> {
+  await requireUser();
+  const clean = label.trim();
+  if (!clean) throw new Error("Name required");
+  const base = "custom_" + clean.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  // Ensure a unique value.
+  let value = base || `custom_${Date.now()}`;
+  const existing = new Set(
+    (await db.select({ v: pipelineStages.value }).from(pipelineStages)).map((r) => r.v),
+  );
+  let n = 2;
+  while (existing.has(value)) value = `${base}_${n++}`;
+  const [{ maxPos }] = await db
+    .select({ maxPos: sql<number>`coalesce(max(${pipelineStages.position}), 0)::int` })
+    .from(pipelineStages);
+  await db
+    .insert(pipelineStages)
+    .values({ value, label: clean, position: Number(maxPos) + 1, isBase: false })
+    .onConflictDoNothing({ target: pipelineStages.value });
+  revalidatePath("/pipeline");
+}
+
+export async function deletePipelineStage(value: string): Promise<{ error?: string }> {
+  await requireUser();
+  const [st] = await db.select().from(pipelineStages).where(eq(pipelineStages.value, value)).limit(1);
+  if (!st) return {};
+  if (st.isBase) return { error: "Built-in stages can be hidden but not deleted." };
+  // Move any cards in this stage back to the first stage so nothing is orphaned.
+  await db.update(pipelineItems).set({ stage: "new_response" }).where(eq(pipelineItems.stage, value));
+  await db.delete(pipelineStages).where(eq(pipelineStages.value, value));
+  revalidatePath("/pipeline");
+  return {};
+}
+
+export async function setPipelineStageHidden(value: string, hidden: boolean): Promise<void> {
+  await requireUser();
+  await db.update(pipelineStages).set({ hidden }).where(eq(pipelineStages.value, value));
+  revalidatePath("/pipeline");
+}
 
 async function requireUser() {
   const session = await auth();
@@ -176,7 +239,12 @@ export async function regenerateReplyDraft(pipelineItemId: string): Promise<{ er
 /** Human stage override (sets outcome for won/lost). */
 export async function setPipelineStage(itemId: string, stage: string): Promise<void> {
   await requireUser();
-  if (!isStage(stage)) throw new Error("Invalid stage");
+  const [valid] = await db
+    .select({ v: pipelineStages.value })
+    .from(pipelineStages)
+    .where(eq(pipelineStages.value, stage))
+    .limit(1);
+  if (!valid) throw new Error("Invalid stage");
   const [item] = await db.select().from(pipelineItems).where(eq(pipelineItems.id, itemId)).limit(1);
   if (!item) return;
   await assertAccountAccess(item.accountId);

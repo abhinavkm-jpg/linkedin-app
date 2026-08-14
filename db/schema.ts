@@ -560,6 +560,19 @@ export const replyDrafts = pgTable(
 
 export type ReplyDraft = typeof replyDrafts.$inferSelect;
 
+/** Configurable pipeline stages (columns). Seeded from the built-in defaults. */
+export const pipelineStages = pgTable("pipeline_stages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  value: text("value").notNull().unique(),
+  label: text("label").notNull(),
+  position: integer("position").notNull().default(0),
+  hidden: boolean("hidden").notNull().default(false),
+  isBase: boolean("is_base").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type PipelineStageRow = typeof pipelineStages.$inferSelect;
+
 export const webhookEvents = pgTable(
   "webhook_events",
   {

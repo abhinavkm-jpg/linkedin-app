@@ -6,12 +6,14 @@ import { db } from "@/db";
 import { pipelineItems, connections, linkedinAccounts, chats } from "@/db/schema";
 import { auth } from "@/auth";
 import { getAccessibleAccountIds, accountScope } from "@/lib/access";
+import { getPipelineStages, type StageConfig } from "@/app/(dashboard)/pipeline/actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function PipelinePage() {
   let rows: PipelineRow[] = [];
   let accounts: { id: string; name: string }[] = [];
+  let stages: StageConfig[] = [];
   let error: string | null = null;
 
   try {
@@ -57,6 +59,8 @@ export default async function PipelinePage() {
       .from(linkedinAccounts)
       .where(accountScope(linkedinAccounts.id, accessibleIds))
       .orderBy(linkedinAccounts.name);
+
+    stages = await getPipelineStages();
   } catch (e) {
     error = e instanceof Error ? e.message : "Failed to load pipeline";
   }
@@ -73,7 +77,7 @@ export default async function PipelinePage() {
             <CardContent className="py-4 text-sm text-destructive">{error}</CardContent>
           </Card>
         ) : (
-          <PipelineBoard rows={rows} accounts={accounts} />
+          <PipelineBoard rows={rows} accounts={accounts} stages={stages} />
         )}
       </div>
     </>

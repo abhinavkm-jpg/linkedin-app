@@ -1,17 +1,47 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { Loader2, Download, MessageSquare, Search } from "lucide-react";
+import {
+  Loader2,
+  Download,
+  MessageSquare,
+  Search,
+  SlidersHorizontal,
+  Plus,
+  Trash2,
+  Eye,
+  EyeOff,
+  Users,
+  Target,
+  CalendarCheck,
+  Trophy,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { STAGES, intentLabel } from "@/lib/pipeline";
-import { setPipelineStage, importRepliedIntoPipeline } from "@/app/(dashboard)/pipeline/actions";
+import { intentLabel, QUALIFIED_STAGES, MEETING_STAGES } from "@/lib/pipeline";
+import {
+  setPipelineStage,
+  importRepliedIntoPipeline,
+  addPipelineStage,
+  deletePipelineStage,
+  setPipelineStageHidden,
+  type StageConfig,
+} from "@/app/(dashboard)/pipeline/actions";
 
 export type PipelineRow = {
   id: string;
@@ -44,9 +74,11 @@ const intentTone: Record<string, string> = {
 export function PipelineBoard({
   rows,
   accounts,
+  stages,
 }: {
   rows: PipelineRow[];
   accounts: { id: string; name: string }[];
+  stages: StageConfig[];
 }) {
   const router = useRouter();
   const [items, setItems] = useState<PipelineRow[]>(rows);
@@ -55,6 +87,10 @@ export function PipelineBoard({
   const [overStage, setOverStage] = useState<string | null>(null);
   const [importAcct, setImportAcct] = useState(accounts[0]?.id ?? "");
   const [importing, setImporting] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
+
+  const visibleStages = stages.filter((s) => !s.hidden);
+  const labelOf = (v: string) => stages.find((s) => s.value === v)?.label ?? v;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -66,10 +102,26 @@ export function PipelineBoard({
 
   const byStage = useMemo(() => {
     const map = new Map<string, PipelineRow[]>();
-    for (const s of STAGES) map.set(s.value, []);
-    for (const r of filtered) (map.get(r.stage) ?? map.set(r.stage, []).get(r.stage)!).push(r);
+    for (const s of stages) map.set(s.value, []);
+    for (const r of filtered) {
+      if (!map.has(r.stage)) map.set(r.stage, []);
+      map.get(r.stage)!.push(r);
+    }
     return map;
-  }, [filtered]);
+  }, [filtered, stages]);
+
+  const kpis = {
+    total: rows.length,
+    qualified: rows.filter((r) => (QUALIFIED_STAGES as string[]).includes(r.stage)).length,
+    meetings: rows.filter((r) => (MEETING_STAGES as string[]).includes(r.stage)).length,
+    won: rows.filter((r) => r.stage === "won").length,
+  };
+  const kpiTiles = [
+    { icon: Users, label: "Leads in pipeline", value: kpis.total, tone: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
+    { icon: Target, label: "Qualified", value: kpis.qualified, tone: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
+    { icon: CalendarCheck, label: "Meetings", value: kpis.meetings, tone: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+    { icon: Trophy, label: "Won", value: kpis.won, tone: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
+  ];
 
   function move(id: string, stage: string) {
     const row = items.find((r) => r.id === id);
@@ -97,12 +149,32 @@ export function PipelineBoard({
 
   return (
     <div className="space-y-4">
-      {/* Slim toolbar */}
+      {/* Count boxes */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {kpiTiles.map((k) => (
+          <Card key={k.label}>
+            <CardContent className="flex items-center gap-3 py-4">
+              <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", k.tone)}>
+                <k.icon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-2xl font-semibold tabular-nums">{k.value.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">{k.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-56 flex-1">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search a lead…" className="pl-8" />
         </div>
+        <Button variant="outline" size="sm" onClick={() => setManageOpen(true)}>
+          <SlidersHorizontal className="h-4 w-4" /> Manage pipeline
+        </Button>
         {accounts.length > 0 && (
           <div className="flex items-center gap-1">
             {accounts.length > 1 && (
@@ -128,7 +200,7 @@ export function PipelineBoard({
 
       {/* Board */}
       <div className="flex gap-3 overflow-x-auto pb-3">
-        {STAGES.map((s) => {
+        {visibleStages.map((s) => {
           const cards = byStage.get(s.value) ?? [];
           return (
             <div
@@ -154,7 +226,8 @@ export function PipelineBoard({
                   {cards.length}
                 </span>
               </div>
-              <div className="min-h-16 space-y-2 p-2">
+              {/* ~5 cards tall, then scroll */}
+              <div className="max-h-[30rem] space-y-2 overflow-y-auto p-2">
                 {cards.map((r) => (
                   <div
                     key={r.id}
@@ -222,6 +295,112 @@ export function PipelineBoard({
           );
         })}
       </div>
+
+      <ManageDialog open={manageOpen} onOpenChange={setManageOpen} stages={stages} labelOf={labelOf} />
     </div>
+  );
+}
+
+function ManageDialog({
+  open,
+  onOpenChange,
+  stages,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  stages: StageConfig[];
+  labelOf: (v: string) => string;
+}) {
+  const router = useRouter();
+  const [newLabel, setNewLabel] = useState("");
+  const [pending, start] = useTransition();
+
+  function run(fn: () => Promise<unknown>, ok?: string) {
+    start(async () => {
+      try {
+        const res = (await fn()) as { error?: string } | void;
+        if (res && "error" in res && res.error) toast.error(res.error);
+        else if (ok) toast.success(ok);
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed");
+      }
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Manage pipeline stages</DialogTitle>
+          <DialogDescription>
+            Show or hide columns, add your own stages, or delete custom ones. Built-in stages can be
+            hidden but not deleted.
+          </DialogDescription>
+        </DialogHeader>
+
+        <ul className="divide-y rounded-md border">
+          {stages.map((s) => (
+            <li key={s.value} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+              <span className="flex items-center gap-2">
+                <button
+                  type="button"
+                  title={s.hidden ? "Show column" : "Hide column"}
+                  onClick={() => run(() => setPipelineStageHidden(s.value, !s.hidden))}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  {s.hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+                <span className={cn(s.hidden && "text-muted-foreground line-through")}>{s.label}</span>
+                {!s.isBase && (
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    custom
+                  </span>
+                )}
+              </span>
+              <span className="flex items-center gap-2">
+                <Switch
+                  checked={!s.hidden}
+                  onCheckedChange={(v) => run(() => setPipelineStageHidden(s.value, !v))}
+                  disabled={pending}
+                />
+                {!s.isBase && (
+                  <button
+                    type="button"
+                    title="Delete stage"
+                    onClick={() => run(() => deletePipelineStage(s.value), "Stage deleted")}
+                    disabled={pending}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+
+        <div className="flex gap-2">
+          <Input
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            placeholder="New stage name (e.g. Nurture)"
+          />
+          <Button
+            size="sm"
+            disabled={pending || !newLabel.trim()}
+            onClick={() =>
+              run(async () => {
+                await addPipelineStage(newLabel);
+                setNewLabel("");
+              }, "Stage added")
+            }
+          >
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            Add
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
