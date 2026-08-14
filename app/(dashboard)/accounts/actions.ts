@@ -414,6 +414,17 @@ export async function setAccountDefaultPrompt(accountId: string, text: string): 
   revalidatePath(`/accounts/${accountId}`);
 }
 
+/** Set this account's reply/pipeline sales strategy (offer + qualification). Admin only. */
+export async function setAccountReplyStrategy(accountId: string, text: string): Promise<void> {
+  await requireAdmin();
+  await db
+    .update(linkedinAccounts)
+    .set({ replyStrategy: text.trim() || null })
+    .where(eq(linkedinAccounts.id, accountId));
+  revalidatePath("/accounts");
+  revalidatePath(`/accounts/${accountId}`);
+}
+
 /** Update (or create) the workspace default DM system prompt. Admin only. */
 export async function updateDefaultPrompt(text: string): Promise<void> {
   const user = await requireAdmin();

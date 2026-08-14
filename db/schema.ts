@@ -147,6 +147,10 @@ export const linkedinAccounts = pgTable(
     // every DM unless a step or per-stage box overrides it; falls back to the
     // workspace default when empty.
     defaultPrompt: text("default_prompt"),
+    // Sales strategy + qualification context used ONLY by reply/pipeline drafts
+    // (offer, who's a fit, how to advance, meeting preference). Layered on top of
+    // the voice + the built-in stage playbook.
+    replyStrategy: text("reply_strategy"),
     // Content library: sitemap to crawl + which URL sections are shareable in
     // content-sharing follow-ups (e.g. {"blog"}).
     sitemapUrl: text("sitemap_url"),

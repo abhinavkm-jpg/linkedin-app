@@ -65,7 +65,8 @@ export async function refreshPipelineForReply(opts: {
   };
 
   const voice = account.defaultPrompt?.trim() || (await getDefaultSystemPrompt());
-  const draft = await draftPipelineReply({ prospect, priorMessages, currentStage, voice });
+  const strategy = account.replyStrategy?.trim() || undefined;
+  const draft = await draftPipelineReply({ prospect, priorMessages, currentStage, voice, strategy });
 
   // Brand-new items adopt the AI-suggested stage; existing items keep their
   // (human-controlled) stage and just refresh intent + last inbound.

@@ -192,6 +192,7 @@ export default async function AccountSettingsPage({
             accountId={account.id}
             accountName={account.name}
             defaultPrompt={account.defaultPrompt || globalDefault}
+            replyStrategy={account.replyStrategy ?? ""}
             initial={promptSet}
           />
         </Section>

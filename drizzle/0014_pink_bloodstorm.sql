@@ -1,0 +1,1 @@
+ALTER TABLE "linkedin_accounts" ADD COLUMN "reply_strategy" text;

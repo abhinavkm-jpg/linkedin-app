@@ -3,12 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Save, Sparkles, Play, AlertTriangle, RotateCcw, Mic } from "lucide-react";
+import { Loader2, Save, Sparkles, Play, AlertTriangle, RotateCcw, Mic, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { saveAccountPromptSet, setAccountDefaultPrompt } from "@/app/(dashboard)/accounts/actions";
+import {
+  saveAccountPromptSet,
+  setAccountDefaultPrompt,
+  setAccountReplyStrategy,
+} from "@/app/(dashboard)/accounts/actions";
 import { previewAiMessage } from "@/app/(dashboard)/templates/actions";
 import { ConnectionPicker, type PickedConnection } from "@/components/connection-picker";
 import { STAGE_STARTER_PROMPTS } from "@/lib/ai/prompts";
@@ -35,11 +39,13 @@ export function PromptSetPanel({
   accountId,
   accountName,
   defaultPrompt,
+  replyStrategy,
   initial,
 }: {
   accountId: string;
   accountName: string;
   defaultPrompt: string;
+  replyStrategy: string;
   initial: { stage: string; promptText: string | null; shareContent: boolean }[];
 }) {
   const router = useRouter();
@@ -47,6 +53,10 @@ export function PromptSetPanel({
   // The shared VOICE (identity + rules) for this account. Applies to every stage.
   const [voice, setVoice] = useState(defaultPrompt);
   const [savingVoice, setSavingVoice] = useState(false);
+
+  // Reply/pipeline sales strategy (offer + qualification) — reply drafts only.
+  const [strategy, setStrategy] = useState(replyStrategy);
+  const [savingStrategy, setSavingStrategy] = useState(false);
 
   // Per-stage TASK — only what that message does. Seeded from short starters.
   const [entries, setEntries] = useState<Record<string, Entry>>(() => {
@@ -78,6 +88,17 @@ export function PromptSetPanel({
       })
       .catch((e) => toast.error(e instanceof Error ? e.message : "Save failed"))
       .finally(() => setSavingVoice(false));
+  }
+
+  function saveStrategy() {
+    setSavingStrategy(true);
+    setAccountReplyStrategy(accountId, strategy)
+      .then(() => {
+        toast.success("Reply strategy saved");
+        router.refresh();
+      })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Save failed"))
+      .finally(() => setSavingStrategy(false));
   }
 
   function persist(stages: { stage: string; promptText: string | null; shareContent: boolean }[]) {
@@ -173,6 +194,41 @@ export function PromptSetPanel({
             <Button size="sm" onClick={saveVoice} disabled={savingVoice}>
               {savingVoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Save voice
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Reply strategy — used only by pipeline reply drafts (offer + qualification) */}
+      <Card className="border-primary/30">
+        <CardHeader className="flex-row items-center gap-2 space-y-0 pb-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Target className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <CardTitle className="text-base">Reply strategy</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Offer, who&apos;s a fit &amp; how to advance a conversation. Used only when drafting
+              replies to people who respond (the Pipeline), on top of the voice + the built-in stage
+              playbook. Not used for cold outbound.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea
+            value={strategy}
+            onChange={(e) => setStrategy(e.target.value)}
+            rows={10}
+            className="font-mono text-xs leading-relaxed"
+            placeholder="Offer, who is a fit / not a fit, qualification questions, when to move to a meeting, meeting length…"
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              {strategy.length.toLocaleString()} characters · reply drafts only
+            </span>
+            <Button size="sm" onClick={saveStrategy} disabled={savingStrategy}>
+              {savingStrategy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save reply strategy
             </Button>
           </div>
         </CardContent>

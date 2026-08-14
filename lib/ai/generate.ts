@@ -364,8 +364,10 @@ export async function draftPipelineReply(opts: {
   prospect: ProspectContext;
   priorMessages: Array<{ from: "me" | "them"; text: string }>;
   currentStage: string;
-  /** Who-we-are / offer context (the account's voice prompt). */
+  /** Who-we-are / voice context (the account's voice prompt). */
   voice?: string;
+  /** Offer + qualification + how-to-advance context (the account's reply strategy). */
+  strategy?: string;
 }): Promise<PipelineDraft> {
   const fallback: PipelineDraft = {
     intent: "unclear",
@@ -382,7 +384,10 @@ export async function draftPipelineReply(opts: {
       .map((m) => `${m.from === "me" ? "Me" : "Them"}: ${m.text}`)
       .join("\n");
     const parts = [
-      `WHO WE ARE / OUR OFFER:\n${opts.voice?.trim() || "A B2B demand-generation and campaign-execution partner."}`,
+      `WHO WE ARE / VOICE:\n${opts.voice?.trim() || "A B2B demand-generation and campaign-execution partner."}`,
+      ...(opts.strategy?.trim()
+        ? ["", `SALES STRATEGY & QUALIFICATION:\n${opts.strategy.trim()}`]
+        : []),
       "",
       `Current stage: ${opts.currentStage}`,
       "",
