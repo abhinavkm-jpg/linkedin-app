@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { InboxList, type InboxRow } from "@/components/inbox-list";
 import { db } from "@/db";
-import { chats, connections, linkedinAccounts, replyDrafts } from "@/db/schema";
+import { chats, connections, linkedinAccounts, replyDrafts, pipelineItems, pipelineStages } from "@/db/schema";
 import { auth } from "@/auth";
 import { getAccessibleAccountIds, accountScope } from "@/lib/access";
 
@@ -40,6 +40,8 @@ export default async function InboxPage() {
         publicProfileUrl: connections.publicProfileUrl,
         draftId: replyDrafts.id,
         draftText: replyDrafts.draftText,
+        pipelineStage: pipelineItems.stage,
+        pipelineStageLabel: pipelineStages.label,
       })
       .from(chats)
       .leftJoin(linkedinAccounts, eq(chats.accountId, linkedinAccounts.id))
@@ -48,6 +50,8 @@ export default async function InboxPage() {
         replyDrafts,
         and(eq(replyDrafts.connectionId, chats.connectionId), eq(replyDrafts.status, "pending")),
       )
+      .leftJoin(pipelineItems, eq(pipelineItems.connectionId, chats.connectionId))
+      .leftJoin(pipelineStages, eq(pipelineStages.value, pipelineItems.stage))
       .where(accountScope(chats.accountId, accessibleIds))
       .orderBy(desc(chats.lastMessageAt))
       .limit(200);
@@ -68,6 +72,8 @@ export default async function InboxPage() {
         accountName: c.accountName,
         draftId: c.draftId ?? null,
         draftText: c.draftText ?? null,
+        pipelineStage: c.pipelineStage ?? null,
+        pipelineStageLabel: c.pipelineStageLabel ?? null,
       };
     });
   } catch (e) {

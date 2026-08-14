@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { stageTone } from "@/lib/pipeline";
 import {
   sendReply,
   markChatRead,
@@ -49,6 +50,24 @@ export interface InboxRow {
   accountName: string | null;
   draftId: string | null;
   draftText: string | null;
+  pipelineStage: string | null;
+  pipelineStageLabel: string | null;
+}
+
+/** Small pipeline-stage pill (shown on rows + in the chat header). */
+function StagePill({ row, className }: { row: InboxRow; className?: string }) {
+  if (!row.pipelineStage || !row.pipelineStageLabel) return null;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium",
+        stageTone(row.pipelineStage),
+        className,
+      )}
+    >
+      {row.pipelineStageLabel}
+    </span>
+  );
 }
 
 /** Small transparency note showing the AI reply-triage decision + reason. */
@@ -291,6 +310,7 @@ function ChatRowButton({ chat, onOpen }: { chat: InboxRow; onOpen: () => void })
               {chat.name}
             </span>
             {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+            <StagePill row={chat} className="ml-auto shrink-0" />
           </div>
           {chat.headline ? (
             <p className="truncate text-xs text-muted-foreground">{chat.headline}</p>
@@ -346,6 +366,7 @@ function ChatGridCard({ chat, onOpen }: { chat: InboxRow; onOpen: () => void }) 
                 {chat.name}
               </span>
               {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+              <StagePill row={chat} className="ml-auto shrink-0" />
             </div>
             {chat.headline ? (
               <p className="truncate text-xs text-muted-foreground">{chat.headline}</p>
@@ -444,7 +465,10 @@ function ChatDialog({ chat, onClose }: { chat: InboxRow | null; onClose: () => v
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
-                <DialogTitle className="truncate">{chat.name}</DialogTitle>
+                <div className="flex items-center gap-2">
+                  <DialogTitle className="truncate">{chat.name}</DialogTitle>
+                  <StagePill row={chat} />
+                </div>
                 {chat.headline && (
                   <p className="truncate text-xs text-muted-foreground">{chat.headline}</p>
                 )}

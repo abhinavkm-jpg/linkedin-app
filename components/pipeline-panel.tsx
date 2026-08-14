@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ import {
   Target,
   CalendarCheck,
   Trophy,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { intentLabel, QUALIFIED_STAGES, MEETING_STAGES } from "@/lib/pipeline";
+import { intentLabel, stageTone, QUALIFIED_STAGES, MEETING_STAGES } from "@/lib/pipeline";
 import {
   setPipelineStage,
   importRepliedIntoPipeline,
@@ -42,16 +43,24 @@ import {
   setPipelineStageHidden,
   type StageConfig,
 } from "@/app/(dashboard)/pipeline/actions";
+import { getChatThread, type ThreadMessage } from "@/app/(dashboard)/inbox/actions";
 
 export type PipelineRow = {
   id: string;
   name: string;
   company: string | null;
   headline: string | null;
+  position: string | null;
+  country: string | null;
   accountName: string | null;
   stage: string;
   intent: string | null;
+  meetingStatus: string;
   lastInboundAt: string | null;
+  lastInboundText: string | null;
+  lastOutboundText: string | null;
+  updatedAt: string | null;
+  profileUrl: string | null;
   chatInternalId: string | null;
 };
 
@@ -88,6 +97,7 @@ export function PipelineBoard({
   const [importAcct, setImportAcct] = useState(accounts[0]?.id ?? "");
   const [importing, setImporting] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [selected, setSelected] = useState<PipelineRow | null>(null);
 
   const visibleStages = stages.filter((s) => !s.hidden);
   const labelOf = (v: string) => stages.find((s) => s.value === v)?.label ?? v;
@@ -237,8 +247,9 @@ export function PipelineBoard({
                       setDragId(null);
                       setOverStage(null);
                     }}
+                    onClick={() => setSelected(r)}
                     className={cn(
-                      "group cursor-grab rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing",
+                      "group cursor-pointer rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing",
                       dragId === r.id && "opacity-50",
                     )}
                   >
@@ -279,6 +290,7 @@ export function PipelineBoard({
                           variant="ghost"
                           title="Open chat in Inbox"
                           aria-label="Open chat in Inbox"
+                          onClick={(e) => e.stopPropagation()}
                           render={<Link href={`/inbox?c=${r.chatInternalId}`} />}
                         >
                           <MessageSquare className="h-4 w-4" />
@@ -297,7 +309,161 @@ export function PipelineBoard({
       </div>
 
       <ManageDialog open={manageOpen} onOpenChange={setManageOpen} stages={stages} labelOf={labelOf} />
+      <LeadDetailDialog
+        key={selected?.id ?? "none"}
+        row={selected}
+        stages={visibleStages}
+        onClose={() => setSelected(null)}
+        onChanged={() => router.refresh()}
+      />
     </div>
+  );
+}
+
+function LeadDetailDialog({
+  row,
+  stages,
+  onClose,
+  onChanged,
+}: {
+  row: PipelineRow | null;
+  stages: StageConfig[];
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  // Keyed by row id in the parent, so this mounts fresh per lead — no need to
+  // reset state synchronously inside the effect.
+  const [messages, setMessages] = useState<ThreadMessage[] | null>(null);
+  const [, start] = useTransition();
+  const chatId = row?.chatInternalId ?? null;
+
+  useEffect(() => {
+    if (!chatId) return;
+    let cancelled = false;
+    getChatThread(chatId).then((res) => {
+      if (!cancelled) setMessages(res.messages ?? []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId]);
+
+  if (!row) return null;
+  const loading = !!chatId && messages === null;
+
+  const info: { label: string; value: string | null }[] = [
+    { label: "Company", value: row.company },
+    { label: "Title", value: row.position || row.headline },
+    { label: "Country", value: row.country },
+    { label: "Account", value: row.accountName },
+    { label: "Intent", value: intentLabel(row.intent) },
+    { label: "Replied", value: row.lastInboundAt ? formatDistanceToNow(new Date(row.lastInboundAt), { addSuffix: true }) : null },
+  ];
+
+  return (
+    <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent showCloseButton className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader className="flex-row items-start gap-3 space-y-0 pr-8">
+          <Avatar className="h-11 w-11 shrink-0">
+            <AvatarFallback className="bg-primary/10 font-medium text-primary">
+              {initials(row.name)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <DialogTitle className="truncate">{row.name}</DialogTitle>
+              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", stageTone(row.stage))}>
+                {stages.find((s) => s.value === row.stage)?.label ?? row.stage}
+              </span>
+            </div>
+            <DialogDescription className="truncate">
+              {row.headline || row.company || row.accountName}
+            </DialogDescription>
+            {row.profileUrl && (
+              <a
+                href={row.profileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                LinkedIn profile <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+        </DialogHeader>
+
+        {/* Info grid */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {info
+            .filter((i) => i.value)
+            .map((i) => (
+              <div key={i.label} className="rounded-md border bg-muted/20 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{i.label}</p>
+                <p className="truncate text-sm">{i.value}</p>
+              </div>
+            ))}
+        </div>
+
+        {/* Stage control */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Move to stage</span>
+          <select
+            className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
+            value={row.stage}
+            onChange={(e) => start(async () => { await setPipelineStage(row.id, e.target.value); onChanged(); })}
+          >
+            {stages.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          {chatId && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto"
+              render={<Link href={`/inbox?c=${chatId}`} />}
+            >
+              <MessageSquare className="h-4 w-4" /> Reply in Inbox
+            </Button>
+          )}
+        </div>
+
+        {/* Conversation */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Conversation
+          </p>
+          <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border bg-muted/20 p-3">
+            {loading ? (
+              <p className="flex items-center gap-1 py-6 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading conversation…
+              </p>
+            ) : messages && messages.length > 0 ? (
+              messages.map((m) => (
+                <div key={m.id} className={cn("flex", m.mine ? "justify-end" : "justify-start")}>
+                  <div
+                    className={cn(
+                      "max-w-[80%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm",
+                      m.mine
+                        ? "rounded-br-sm bg-primary text-primary-foreground"
+                        : "rounded-bl-sm bg-card ring-1 ring-border",
+                    )}
+                  >
+                    {m.text}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                {chatId ? "No messages to show." : "No chat linked yet."}
+              </p>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
