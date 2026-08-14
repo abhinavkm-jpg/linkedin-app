@@ -8,6 +8,8 @@ import {
   type LinkedinAccount,
 } from "@/db/schema";
 import { listMessages } from "@/lib/unipile/client";
+import { enrichConnectionRow } from "@/lib/outreach/enrich";
+import { canEnrichNow } from "@/lib/rate-limit";
 import {
   draftPipelineReply,
   getDefaultSystemPrompt,
@@ -53,15 +55,29 @@ export async function refreshPipelineForReply(opts: {
   const isNew = !existing;
   const currentStage = existing?.stage ?? "new_response";
 
+  // Repliers are high-value — enrich them first (About + work history + title)
+  // so the draft has real profile context. Best-effort: respects the daily cap
+  // and never blocks the draft on failure.
+  let profile = conn;
+  if (!profile.enrichedAt) {
+    try {
+      if (await canEnrichNow(account.id)) {
+        profile = await enrichConnectionRow(profile, account, { counter: "enrich" });
+      }
+    } catch {
+      /* keep un-enriched data */
+    }
+  }
+
   const prospect: ProspectContext = {
-    firstName: conn.firstName,
-    lastName: conn.lastName,
-    headline: conn.headline,
-    company: conn.company,
-    position: conn.position,
-    locationCountry: conn.locationCountry,
-    summary: conn.enrichment?.summary ?? null,
-    experience: conn.enrichment?.workExperience ?? [],
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    headline: profile.headline,
+    company: profile.company,
+    position: profile.position,
+    locationCountry: profile.locationCountry,
+    summary: profile.enrichment?.summary ?? null,
+    experience: profile.enrichment?.workExperience ?? [],
   };
 
   // Their newest inbound: the passed reply, else the last "them" line in history.
