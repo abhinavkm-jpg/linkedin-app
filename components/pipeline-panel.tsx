@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -346,6 +346,7 @@ function LeadDetailDialog({
   const [sending, setSending] = useState(false);
   const [, start] = useTransition();
   const chatId = row?.chatInternalId ?? null;
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!chatId) return;
@@ -357,6 +358,12 @@ function LeadDetailDialog({
       cancelled = true;
     };
   }, [chatId]);
+
+  // Jump to the newest message whenever the thread loads or updates.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
   if (!row) return null;
   const loading = !!chatId && messages === null;
@@ -399,9 +406,9 @@ function LeadDetailDialog({
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         showCloseButton
-        className="max-h-[88vh] w-[92vw] max-w-[92vw] overflow-y-auto overflow-x-hidden sm:w-[80vw] sm:max-w-[80vw]"
+        className="flex max-h-[88vh] w-[92vw] max-w-[92vw] flex-col overflow-y-auto overflow-x-hidden sm:w-[80vw] sm:max-w-[80vw] lg:h-[86vh] lg:overflow-hidden"
       >
-        <DialogHeader className="flex-row items-start gap-3 space-y-0 pr-8">
+        <DialogHeader className="flex-row items-start gap-3 space-y-0 pr-8 lg:shrink-0">
           <Avatar className="h-11 w-11 shrink-0">
             {row.avatarUrl && <AvatarImage src={row.avatarUrl} alt={row.name} />}
             <AvatarFallback className="bg-primary/10 font-medium text-primary">
@@ -432,9 +439,9 @@ function LeadDetailDialog({
         </DialogHeader>
 
         {/* Two columns: profile on the left, conversation + reply on the right */}
-        <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+        <div className="grid min-w-0 gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
           {/* Left — profile & enrichment */}
-          <div className="min-w-0 space-y-4">
+          <div className="min-w-0 space-y-4 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
             <div className="grid min-w-0 grid-cols-2 gap-3">
               {info
                 .filter((i) => i.value)
@@ -492,12 +499,15 @@ function LeadDetailDialog({
           </div>
 
           {/* Right — conversation & reply composer */}
-          <div className="flex min-w-0 flex-col gap-3">
-            <div className="min-w-0 space-y-2">
+          <div className="flex min-w-0 flex-col gap-3 lg:min-h-0">
+            <div className="flex min-w-0 flex-col gap-2 lg:min-h-0 lg:flex-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Conversation
               </p>
-              <div className="max-h-[46vh] min-h-40 space-y-2 overflow-y-auto rounded-lg border bg-muted/20 p-3">
+              <div
+                ref={scrollRef}
+                className="max-h-[46vh] min-h-40 space-y-2 overflow-y-auto rounded-lg border bg-muted/20 p-3 lg:max-h-none lg:flex-1"
+              >
                 {loading ? (
                   <p className="flex items-center gap-1 py-6 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" /> Loading conversation…
@@ -526,7 +536,7 @@ function LeadDetailDialog({
             </div>
 
             {/* Reply here (resolves the AI draft + drops it from "Needs you") */}
-            <div className="min-w-0 space-y-2 border-t pt-3">
+            <div className="min-w-0 space-y-2 border-t pt-3 lg:shrink-0">
               {row.draftText && (
                 <button
                   type="button"
