@@ -391,11 +391,13 @@ function LeadDetailDialog({
       .finally(() => setSending(false));
   }
 
+  const stageLabelText = stages.find((s) => s.value === row.stage)?.label ?? row.stage;
+
   return (
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         showCloseButton
-        className="max-h-[90vh] overflow-y-auto overflow-x-hidden sm:max-w-3xl"
+        className="max-h-[88vh] w-[92vw] max-w-[92vw] overflow-y-auto overflow-x-hidden sm:w-[80vw] sm:max-w-[80vw]"
       >
         <DialogHeader className="flex-row items-start gap-3 space-y-0 pr-8">
           <Avatar className="h-11 w-11 shrink-0">
@@ -407,10 +409,10 @@ function LeadDetailDialog({
             <div className="flex flex-wrap items-center gap-2">
               <DialogTitle className="truncate">{row.name}</DialogTitle>
               <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", stageTone(row.stage))}>
-                {stages.find((s) => s.value === row.stage)?.label ?? row.stage}
+                {stageLabelText}
               </span>
             </div>
-            <DialogDescription className="truncate">
+            <DialogDescription className="line-clamp-2 break-words">
               {row.headline || row.company || row.accountName}
             </DialogDescription>
             {row.profileUrl && (
@@ -426,122 +428,130 @@ function LeadDetailDialog({
           </div>
         </DialogHeader>
 
-        {/* Info grid */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {info
-            .filter((i) => i.value)
-            .map((i) => (
-              <div key={i.label} className="min-w-0 rounded-md border bg-muted/20 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{i.label}</p>
-                <p className="truncate text-sm">{i.value}</p>
-              </div>
-            ))}
-        </div>
-
-        {/* Enriched profile */}
-        {row.summary && (
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">About</p>
-            <p className="whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 text-sm">
-              {row.summary}
-            </p>
-          </div>
-        )}
-        {row.experience.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Experience
-            </p>
-            <ul className="space-y-1 rounded-md border bg-muted/20 p-3 text-sm">
-              {row.experience.map((e, i) => (
-                <li key={i} className="truncate">
-                  {[e.position, e.company].filter(Boolean).join(" at ")}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Stage control */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Move to stage</span>
-          <select
-            className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
-            value={row.stage}
-            onChange={(e) =>
-              start(async () => {
-                await setPipelineStage(row.id, e.target.value);
-                onChanged();
-              })
-            }
-          >
-            {stages.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Conversation */}
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Conversation
-          </p>
-          <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border bg-muted/20 p-3">
-            {loading ? (
-              <p className="flex items-center gap-1 py-6 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading conversation…
-              </p>
-            ) : messages && messages.length > 0 ? (
-              messages.map((m) => (
-                <div key={m.id} className={cn("flex", m.mine ? "justify-end" : "justify-start")}>
-                  <div
-                    className={cn(
-                      "max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm shadow-sm",
-                      m.mine
-                        ? "rounded-br-sm bg-primary text-primary-foreground"
-                        : "rounded-bl-sm bg-card ring-1 ring-border",
-                    )}
-                  >
-                    {m.text}
+        {/* Two columns: profile on the left, conversation + reply on the right */}
+        <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+          {/* Left — profile & enrichment */}
+          <div className="min-w-0 space-y-4">
+            <div className="grid min-w-0 grid-cols-2 gap-3">
+              {info
+                .filter((i) => i.value)
+                .map((i) => (
+                  <div key={i.label} className="min-w-0 rounded-md border bg-muted/20 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{i.label}</p>
+                    <p className="truncate text-sm">{i.value}</p>
                   </div>
-                </div>
-              ))
-            ) : (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                {chatId ? "No messages to show." : "No chat linked yet."}
-              </p>
+                ))}
+            </div>
+
+            {/* Stage control */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">Move to stage</span>
+              <select
+                className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
+                value={row.stage}
+                onChange={(e) =>
+                  start(async () => {
+                    await setPipelineStage(row.id, e.target.value);
+                    onChanged();
+                  })
+                }
+              >
+                {stages.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {row.summary && (
+              <div className="min-w-0 space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">About</p>
+                <p className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 text-sm">
+                  {row.summary}
+                </p>
+              </div>
+            )}
+            {row.experience.length > 0 && (
+              <div className="min-w-0 space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Experience
+                </p>
+                <ul className="space-y-1 rounded-md border bg-muted/20 p-3 text-sm">
+                  {row.experience.map((e, i) => (
+                    <li key={i} className="truncate">
+                      {[e.position, e.company].filter(Boolean).join(" at ")}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
-        </div>
 
-        {/* Reply here (resolves the AI draft + drops it from "Needs you") */}
-        <div className="space-y-2 border-t pt-3">
-          {row.draftText && (
-            <button
-              type="button"
-              onClick={() => setText(row.draftText ?? "")}
-              className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-            >
-              <Sparkles className="h-3.5 w-3.5" /> Use AI reply
-            </button>
-          )}
-          <div className="flex items-end gap-2">
-            <Textarea
-              rows={3}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              disabled={!chatId}
-              placeholder={
-                chatId ? `Reply to ${row.name.split(" ")[0] ?? ""}…` : "No chat linked — can't reply here"
-              }
-              className="resize-none bg-background"
-            />
-            <Button size="sm" onClick={reply} disabled={sending || !chatId || !text.trim()}>
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Send
-            </Button>
+          {/* Right — conversation & reply composer */}
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="min-w-0 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Conversation
+              </p>
+              <div className="max-h-[46vh] min-h-40 space-y-2 overflow-y-auto rounded-lg border bg-muted/20 p-3">
+                {loading ? (
+                  <p className="flex items-center gap-1 py-6 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading conversation…
+                  </p>
+                ) : messages && messages.length > 0 ? (
+                  messages.map((m) => (
+                    <div key={m.id} className={cn("flex", m.mine ? "justify-end" : "justify-start")}>
+                      <div
+                        className={cn(
+                          "max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm shadow-sm",
+                          m.mine
+                            ? "rounded-br-sm bg-primary text-primary-foreground"
+                            : "rounded-bl-sm bg-card ring-1 ring-border",
+                        )}
+                      >
+                        {m.text}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    {chatId ? "No messages to show." : "No chat linked yet."}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Reply here (resolves the AI draft + drops it from "Needs you") */}
+            <div className="min-w-0 space-y-2 border-t pt-3">
+              {row.draftText && (
+                <button
+                  type="button"
+                  onClick={() => setText(row.draftText ?? "")}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Use AI reply
+                </button>
+              )}
+              <div className="flex items-end gap-2">
+                <Textarea
+                  rows={3}
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  disabled={!chatId}
+                  placeholder={
+                    chatId
+                      ? `Reply to ${row.name.split(" ")[0] ?? ""}…`
+                      : "No chat linked — can't reply here"
+                  }
+                  className="min-w-0 flex-1 resize-none bg-background"
+                />
+                <Button size="sm" onClick={reply} disabled={sending || !chatId || !text.trim()}>
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Send
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>
