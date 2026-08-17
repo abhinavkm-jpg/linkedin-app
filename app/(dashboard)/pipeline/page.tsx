@@ -45,6 +45,7 @@ export default async function PipelinePage() {
         country: connections.locationCountry,
         publicIdentifier: connections.publicIdentifier,
         publicProfileUrl: connections.publicProfileUrl,
+        avatarUrl: connections.profilePictureUrl,
         enrichment: connections.enrichment,
         accountName: linkedinAccounts.name,
         chatInternalId: chats.id,
@@ -80,6 +81,7 @@ export default async function PipelinePage() {
       profileUrl:
         i.publicProfileUrl ??
         (i.publicIdentifier ? `https://www.linkedin.com/in/${i.publicIdentifier}` : null),
+      avatarUrl: i.avatarUrl ?? null,
       summary: (i.enrichment as ConnectionEnrichment | null)?.summary ?? null,
       experience: ((i.enrichment as ConnectionEnrichment | null)?.workExperience ?? [])
         .slice(0, 5)

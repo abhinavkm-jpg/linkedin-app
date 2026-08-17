@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
@@ -64,6 +64,7 @@ export type PipelineRow = {
   lastOutboundText: string | null;
   updatedAt: string | null;
   profileUrl: string | null;
+  avatarUrl: string | null;
   summary: string | null;
   experience: { position: string | null; company: string | null }[];
   chatInternalId: string | null;
@@ -261,6 +262,7 @@ export function PipelineBoard({
                   >
                     <div className="flex items-start gap-2">
                       <Avatar className="h-8 w-8 shrink-0">
+                        {r.avatarUrl && <AvatarImage src={r.avatarUrl} alt={r.name} />}
                         <AvatarFallback className="bg-primary/10 text-[10px] font-medium text-primary">
                           {initials(r.name)}
                         </AvatarFallback>
@@ -401,6 +403,7 @@ function LeadDetailDialog({
       >
         <DialogHeader className="flex-row items-start gap-3 space-y-0 pr-8">
           <Avatar className="h-11 w-11 shrink-0">
+            {row.avatarUrl && <AvatarImage src={row.avatarUrl} alt={row.name} />}
             <AvatarFallback className="bg-primary/10 font-medium text-primary">
               {initials(row.name)}
             </AvatarFallback>
