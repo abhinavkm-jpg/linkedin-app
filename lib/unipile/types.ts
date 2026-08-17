@@ -65,6 +65,7 @@ export interface UnipileProfile {
   summary?: string;
   location?: string;
   public_profile_url?: string;
+  profile_picture_url?: string;
   primary_locale?: { country?: string; language?: string };
   work_experience?: WorkExperience[];
   work_experience_total_count?: number;

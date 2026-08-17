@@ -75,6 +75,9 @@ export async function enrichConnectionRow(
     .update(connections)
     .set({
       providerId: profile.provider_id ?? conn.providerId,
+      // Refresh the avatar too — LinkedIn photo URLs are signed/expiring, so a
+      // fresh one from each enrichment keeps images from silently 404-ing.
+      profilePictureUrl: profile.profile_picture_url ?? conn.profilePictureUrl,
       company: nextCompany,
       position: nextPosition,
       locationCountry: country?.name ?? null,
