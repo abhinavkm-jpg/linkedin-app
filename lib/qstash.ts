@@ -10,7 +10,8 @@ export type JobName =
   | "send"
   | "poll-acceptance"
   | "auto-enroll"
-  | "auto-enrich";
+  | "auto-enrich"
+  | "comment-dm";
 
 /**
  * Enqueue a background job via QStash, which POSTs to our signed job endpoint.
@@ -45,6 +46,7 @@ function wantedSchedules(base: string) {
   return [
     { path: "send", cron: "*/15 * * * *" }, // process due follow-ups every 15 min
     { path: "auto-enroll", cron: "*/30 * * * *" }, // top up active campaigns every 30 min
+    { path: "comment-dm", cron: "*/20 * * * *" }, // poll post comments + send every 20 min
     { path: "auto-enrich", cron: "10 0 * * *" }, // daily kickstart; the job self-paces ~1/min
     { path: "sync-all", cron: "0 2 * * *" }, // daily connection resync (detect new connections)
     { path: "poll-acceptance", cron: "0 9,13,17 * * *" }, // backup accept detection

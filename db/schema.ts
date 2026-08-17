@@ -573,6 +573,97 @@ export const pipelineStages = pgTable("pipeline_stages", {
 
 export type PipelineStageRow = typeof pipelineStages.$inferSelect;
 
+/* -------------------------------------------------------------------------- */
+/* Comment DMs (reach people who comment on selected posts)                     */
+/* -------------------------------------------------------------------------- */
+
+/** A campaign that watches selected posts' comments and DMs/invites commenters. */
+export const commentCampaigns = pgTable(
+  "comment_campaigns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => linkedinAccounts.id, { onDelete: "cascade" }),
+    ownerUserId: uuid("owner_user_id").references(() => users.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    status: campaignStatusEnum("status").notNull().default("draft"),
+    // The message to send. Reuses the templates table (message type).
+    templateId: uuid("template_id").references(() => templates.id, { onDelete: "set null" }),
+    // "none" = DM/invite every commenter; "keywords" = only when the comment
+    // text matches one of `keywords` (case-insensitive, match-any).
+    filterMode: text("filter_mode").notNull().default("none"),
+    keywords: text("keywords")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("comment_campaigns_account_idx").on(t.accountId)],
+);
+
+export type CommentCampaign = typeof commentCampaigns.$inferSelect;
+
+/** A post selected for a comment campaign. */
+export const commentCampaignPosts = pgTable(
+  "comment_campaign_posts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => commentCampaigns.id, { onDelete: "cascade" }),
+    postId: text("post_id").notNull(), // Unipile social_id / activity URN
+    postUrl: text("post_url"),
+    title: text("title"),
+    commentCount: integer("comment_count").notNull().default(0),
+    lastCommentPolledAt: timestamp("last_comment_polled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("comment_campaign_posts_campaign_post_idx").on(t.campaignId, t.postId)],
+);
+
+export type CommentCampaignPost = typeof commentCampaignPosts.$inferSelect;
+
+/** One commenter queued for outreach (the queue + immutable send log). */
+export const commentDmTargets = pgTable(
+  "comment_dm_targets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => commentCampaigns.id, { onDelete: "cascade" }),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => linkedinAccounts.id, { onDelete: "cascade" }),
+    postId: text("post_id").notNull(),
+    // A stable per-person key within the campaign (provider id / public id / …).
+    commenterKey: text("commenter_key").notNull(),
+    commenterProviderId: text("commenter_provider_id"),
+    commenterPublicId: text("commenter_public_id"),
+    commenterName: text("commenter_name"),
+    commentText: text("comment_text"),
+    matchedKeyword: text("matched_keyword"),
+    connected: boolean("connected").notNull().default(false),
+    // How we reached them: "dm" (1st-degree) | "invite" (note) | null (pending).
+    channel: text("channel"),
+    // "pending" | "sent" | "skipped" | "failed"
+    state: text("state").notNull().default("pending"),
+    reason: text("reason"),
+    chatId: text("chat_id"),
+    unipileMessageId: text("unipile_message_id"),
+    unipileInvitationId: text("unipile_invitation_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("comment_dm_targets_campaign_commenter_idx").on(t.campaignId, t.commenterKey),
+    index("comment_dm_targets_due_idx").on(t.state, t.accountId),
+  ],
+);
+
+export type CommentDmTarget = typeof commentDmTargets.$inferSelect;
+
 export const webhookEvents = pgTable(
   "webhook_events",
   {
@@ -643,6 +734,37 @@ export const enrollmentsRelations = relations(enrollments, ({ one }) => ({
   }),
   account: one(linkedinAccounts, {
     fields: [enrollments.accountId],
+    references: [linkedinAccounts.id],
+  }),
+}));
+
+export const commentCampaignsRelations = relations(commentCampaigns, ({ one, many }) => ({
+  account: one(linkedinAccounts, {
+    fields: [commentCampaigns.accountId],
+    references: [linkedinAccounts.id],
+  }),
+  template: one(templates, {
+    fields: [commentCampaigns.templateId],
+    references: [templates.id],
+  }),
+  posts: many(commentCampaignPosts),
+  targets: many(commentDmTargets),
+}));
+
+export const commentCampaignPostsRelations = relations(commentCampaignPosts, ({ one }) => ({
+  campaign: one(commentCampaigns, {
+    fields: [commentCampaignPosts.campaignId],
+    references: [commentCampaigns.id],
+  }),
+}));
+
+export const commentDmTargetsRelations = relations(commentDmTargets, ({ one }) => ({
+  campaign: one(commentCampaigns, {
+    fields: [commentDmTargets.campaignId],
+    references: [commentCampaigns.id],
+  }),
+  account: one(linkedinAccounts, {
+    fields: [commentDmTargets.accountId],
     references: [linkedinAccounts.id],
   }),
 }));

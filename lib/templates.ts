@@ -41,6 +41,31 @@ export function templateVarsFromConnection(c: {
   };
 }
 
+/**
+ * Build template vars for a post commenter. Reuses the same placeholder set
+ * ({{first_name}}, {{full_name}}, {{headline}}) and adds {{comment_text}} so a
+ * message can reference what they actually said.
+ */
+export function templateVarsFromCommenter(c: {
+  name?: string | null;
+  headline?: string | null;
+  commentText?: string | null;
+}): TemplateVars {
+  const parts = (c.name ?? "").trim().split(/\s+/).filter(Boolean);
+  const first = parts[0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1] : "";
+  return {
+    first_name: first,
+    last_name: last,
+    full_name: (c.name ?? "").trim(),
+    headline: c.headline ?? "",
+    company: "",
+    position: "",
+    country: "",
+    comment_text: c.commentText ?? "",
+  };
+}
+
 /** List the placeholders used in a template, for UI hints/validation. */
 export function extractPlaceholders(template: string): string[] {
   const set = new Set<string>();

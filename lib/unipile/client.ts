@@ -5,10 +5,13 @@ import type {
   InvitationResponse,
   LinkedinApiTier,
   UnipileAccount,
+  UnipileAccountOwner,
   UnipileChat,
   UnipileErrorBody,
   UnipileList,
+  UnipileComment,
   UnipileMessage,
+  UnipilePost,
   UnipileProfile,
   UserRelation,
 } from "./types";
@@ -283,6 +286,61 @@ export function listChatAttendees(chatId: string) {
   });
 }
 
+/* -------------------------------------------------------------------------- */
+/* Posts & comments                                                            */
+/* -------------------------------------------------------------------------- */
+
+/** The connected account's own profile (GET /users/me) — resolves owner ids. */
+export function getAccountOwner(accountId: string) {
+  return request<UnipileAccountOwner>("/users/me", {
+    query: { account_id: accountId },
+  });
+}
+
+/**
+ * List a user's recent posts. `identifier` is the author's provider/public id
+ * (for the connected account, use linkedin_accounts.ownerProviderId).
+ */
+export function listPosts(params: {
+  accountId: string;
+  identifier: string;
+  cursor?: string;
+  limit?: number;
+}) {
+  return request<UnipileList<UnipilePost>>(
+    `/users/${encodeURIComponent(params.identifier)}/posts`,
+    {
+      query: {
+        account_id: params.accountId,
+        cursor: params.cursor,
+        limit: params.limit ?? 20,
+      },
+    },
+  );
+}
+
+/**
+ * List the comments on a post. `postId` is the post's social id / activity URN
+ * (UnipilePost.social_id, falling back to id).
+ */
+export function listPostComments(params: {
+  accountId: string;
+  postId: string;
+  cursor?: string;
+  limit?: number;
+}) {
+  return request<UnipileList<UnipileComment>>(
+    `/posts/${encodeURIComponent(params.postId)}/comments`,
+    {
+      query: {
+        account_id: params.accountId,
+        cursor: params.cursor,
+        limit: params.limit ?? 100,
+      },
+    },
+  );
+}
+
 export const unipile = {
   listAccounts,
   getAccount,
@@ -295,4 +353,7 @@ export const unipile = {
   listChats,
   listMessages,
   listChatAttendees,
+  getAccountOwner,
+  listPosts,
+  listPostComments,
 };

@@ -9,6 +9,7 @@ import {
   Megaphone,
   Inbox,
   KanbanSquare,
+  MessagesSquare,
   FileText,
   Settings,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const items = [
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/pipeline", label: "Pipeline", icon: KanbanSquare },
+  { href: "/comment-dm", label: "Comment DMs", icon: MessagesSquare },
   { href: "/templates", label: "Templates & AI", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
