@@ -41,6 +41,21 @@ export const STAGE_STARTER_PROMPTS: Record<string, string> = {
 };
 
 /**
+ * Whether each stage shares a content article BY DEFAULT (when the account has
+ * no saved per-stage row). This is the single source of truth used by BOTH the
+ * per-stage editor (initial toggle state) and the send worker (effective
+ * behavior) so "what the panel shows" always matches "what the campaign sends".
+ * An explicit saved row overrides this.
+ */
+export const STAGE_SHARE_DEFAULTS: Record<string, boolean> = {
+  connection_request: false,
+  welcome: false,
+  follow_up_1: false,
+  follow_up_2: true,
+  follow_up_3: true,
+};
+
+/**
  * Words/phrases to avoid (from the Master Command). We soft-check generated
  * output against these and can regenerate or flag.
  */

@@ -21,6 +21,7 @@ import { canSend, canEnrichNow, incrementCounter } from "@/lib/rate-limit";
 import { sendInvitation, startChat, sendMessage, getProfile, listMessages, UnipileError } from "@/lib/unipile/client";
 import { renderTemplate, templateVarsFromConnection } from "@/lib/templates";
 import { generateMessage, type OutreachStep, type ProspectContext } from "@/lib/ai/generate";
+import { STAGE_SHARE_DEFAULTS } from "@/lib/ai/prompts";
 import { connectionMatchesIcp, hasIcp } from "@/lib/icp";
 import { enrichConnectionRow } from "@/lib/outreach/enrich";
 import { pickRelevantAssets, contentInstruction } from "@/lib/outreach/content";
@@ -369,8 +370,12 @@ export async function resolveStepText(
     };
 
     // Content-sharing stage → hand the model real article options to reference.
+    // An explicit saved row wins; otherwise fall back to the stage default so the
+    // effective behavior matches what the per-stage editor shows (follow-up 2 & 3
+    // share by default until turned off).
+    const shouldShare = setRow ? setRow.shareContent : (STAGE_SHARE_DEFAULTS[stage] ?? false);
     let instructions: string | undefined;
-    if (setRow?.shareContent) {
+    if (shouldShare) {
       const assets = await pickRelevantAssets(camp.accountId, prospect, 5);
       if (assets.length > 0) instructions = contentInstruction(assets);
     }
