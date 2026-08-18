@@ -81,14 +81,31 @@ type FilterKey = "all" | "contacted" | "replied" | "attention";
 
 const PAGE_SIZE = 20;
 
+// Enrollment states that mean an invite/message was already sent — used to
+// derive "contacted" from state when activity history isn't fully loaded.
+const CONTACTED_STATES = new Set([
+  "awaiting_accept",
+  "accepted",
+  "messaging",
+  "messaged",
+  "in_followup",
+  "replied",
+  "completed",
+]);
+
 export function CampaignRecipients({
   recipients,
   activities,
   stepCount,
+  counts: serverCounts,
+  totalRecipients,
 }: {
   recipients: Recipient[];
   activities: RecipientActivity[];
   stepCount: number;
+  /** True totals across ALL enrollments (not just the loaded slice). */
+  counts?: { all: number; contacted: number; replied: number; attention: number };
+  totalRecipients?: number;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -120,21 +137,24 @@ export function CampaignRecipients({
           sentCount: sent.length,
           lastTouch: [...timeline].reverse().find((t) => t.status === "success")?.touch ?? null,
           lastAt: last?.createdAt ?? null,
-          contacted: sent.length > 0,
+          contacted: sent.length > 0 || CONTACTED_STATES.has(r.state),
           attention: r.state === "failed" || !!r.lastError,
         };
       }),
     [recipients, byConnection],
   );
 
+  // Prefer server-computed totals (across ALL enrollments) so the chips match
+  // the Progress panel; fall back to counting the loaded slice.
   const counts = useMemo(
-    () => ({
-      all: enriched.length,
-      contacted: enriched.filter((r) => r.contacted).length,
-      replied: enriched.filter((r) => r.state === "replied").length,
-      attention: enriched.filter((r) => r.attention).length,
-    }),
-    [enriched],
+    () =>
+      serverCounts ?? {
+        all: enriched.length,
+        contacted: enriched.filter((r) => r.contacted).length,
+        replied: enriched.filter((r) => r.state === "replied").length,
+        attention: enriched.filter((r) => r.attention).length,
+      },
+    [enriched, serverCounts],
   );
 
   const rows = useMemo(() => {
@@ -176,7 +196,7 @@ export function CampaignRecipients({
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           <Users className="h-4 w-4" /> Recipients
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-            {recipients.length.toLocaleString()}
+            {(totalRecipients ?? recipients.length).toLocaleString()}
           </span>
         </h2>
         <div className="relative w-56 max-w-full">
@@ -209,6 +229,14 @@ export function CampaignRecipients({
           </button>
         ))}
       </div>
+
+      {totalRecipients !== undefined && recipients.length < totalRecipients && (
+        <p className="text-xs text-muted-foreground">
+          Showing the {recipients.length.toLocaleString()} most active of{" "}
+          {totalRecipients.toLocaleString()} enrolled (replied, mid-sequence, and needs-attention
+          first). Tab counts above reflect the full campaign.
+        </p>
+      )}
 
       <div className="overflow-x-auto rounded-lg border">
         <Table>

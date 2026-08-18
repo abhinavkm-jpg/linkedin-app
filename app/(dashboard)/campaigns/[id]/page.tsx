@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, asc, desc, eq, count, countDistinct, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, count, countDistinct, inArray, sql } from "drizzle-orm";
 import { ChevronLeft, Target, UserPlus, ListOrdered } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -73,8 +73,24 @@ export default async function CampaignDetailPage({
       .from(enrollments)
       .innerJoin(connections, eq(connections.id, enrollments.connectionId))
       .where(eq(enrollments.campaignId, id))
-      .orderBy(desc(enrollments.updatedAt))
-      .limit(300),
+      // Surface the "interesting" people first (replied, failed, mid-sequence)
+      // so the filter tabs work even when a big queued top-up dominates by
+      // recency. Queued/enriching sort last.
+      .orderBy(
+        sql`case ${enrollments.state}
+          when 'replied' then 0
+          when 'failed' then 1
+          when 'in_followup' then 2
+          when 'messaged' then 3
+          when 'accepted' then 4
+          when 'messaging' then 5
+          when 'awaiting_accept' then 6
+          when 'paused' then 7
+          when 'completed' then 8
+          else 9 end`,
+        desc(enrollments.updatedAt),
+      )
+      .limit(1000),
     db
       .select({
         activityId: activities.id,
@@ -137,6 +153,7 @@ export default async function CampaignDetailPage({
   const enrolledTotal = stateCountsNum.reduce((sum, s) => sum + s.n, 0);
   const repliedCount = stateCountsNum.find((s) => s.state === "replied")?.n ?? 0;
   const completedCount = stateCountsNum.find((s) => s.state === "completed")?.n ?? 0;
+  const attentionCount = stateCountsNum.find((s) => s.state === "failed")?.n ?? 0;
   const [{ contacted }] = await db
     .select({ contacted: countDistinct(activities.connectionId) })
     .from(activities)
@@ -189,6 +206,13 @@ export default async function CampaignDetailPage({
 
         <CampaignRecipients
           stepCount={steps.length}
+          totalRecipients={enrolledTotal}
+          counts={{
+            all: enrolledTotal,
+            contacted: Number(contacted),
+            replied: repliedCount,
+            attention: attentionCount,
+          }}
           recipients={enrolled.map((e) => ({
             enrollmentId: e.enrollmentId,
             connectionId: e.connectionId,
