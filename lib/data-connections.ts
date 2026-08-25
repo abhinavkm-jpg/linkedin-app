@@ -17,7 +17,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { db } from "@/db";
-import { connections, enrollments, type Connection, type CampaignTargeting } from "@/db/schema";
+import { connections, enrollments, chats, type Connection, type CampaignTargeting } from "@/db/schema";
 import { toCode } from "@/lib/countries";
 import { accountScope } from "@/lib/access";
 
@@ -186,6 +186,20 @@ export async function getIcpMatches(
               eq(enrollments.connectionId, connections.id),
             ),
           ),
+      ),
+    );
+  }
+
+  // Unique-DM campaigns also exclude anyone we already have a conversation with
+  // (a prior campaign, an earlier reply, or a manual DM) — never enroll a person
+  // we've already messaged. Skipped for "multi DMs" (dedupe === false).
+  if (opts.dedupe !== false) {
+    clauses.push(
+      notExists(
+        db
+          .select({ x: sql`1` })
+          .from(chats)
+          .where(eq(chats.connectionId, connections.id)),
       ),
     );
   }
