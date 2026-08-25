@@ -1,0 +1,280 @@
+{
+  "name": "LinkedIn Campaign — WF2 Send Engine (Google Sheets)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [ { "field": "minutes", "minutesInterval": 15 } ] }
+      },
+      "id": "sched-1",
+      "name": "Every 15 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [ -900, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "value": "YOUR_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Config", "mode": "name" },
+        "options": {}
+      },
+      "id": "get-config",
+      "name": "Get config",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [ -700, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "value": "YOUR_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Leads", "mode": "name" },
+        "options": {}
+      },
+      "id": "get-leads",
+      "name": "Get leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [ -500, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "value": "YOUR_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Counters", "mode": "name" },
+        "options": {}
+      },
+      "id": "get-counters",
+      "name": "Get counters",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [ -300, 300 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfgRow = $('Get config').first().json;\nconst j = (s, d) => { try { return JSON.parse(s); } catch { return d; } };\nconst cfg = {\n  account_id: cfgRow.account_id,\n  sequence: j(cfgRow.sequence, []),\n  invites_per_day: Number(cfgRow.invites_per_day || 0),\n  messages_per_day: Number(cfgRow.messages_per_day || 0),\n  cd_min: Number(cfgRow.cooldown_min_sec || 120),\n  cd_max: Number(cfgRow.cooldown_max_sec || 600),\n  voice: cfgRow.voice || '',\n};\nconst now = Date.now();\nif (cfgRow.next_send_at && Date.parse(cfgRow.next_send_at) > now)\n  return [{ json: { done: true, reason: 'cooldown' } }];\n\nconst leads = $('Get leads').all().map(i => i.json);\nconst due = leads\n  .filter(l => ['queued','accepted','in_followup'].includes(l.state)\n    && (!l.next_run_at || Date.parse(l.next_run_at) <= now))\n  .sort((a,b) => (Date.parse(a.next_run_at || 0)) - (Date.parse(b.next_run_at || 0)));\nconst lead = due[0];\nif (!lead) return [{ json: { done: true, reason: 'nothing due' } }];\n\nconst stepIdx = Number(lead.step || 0);\nconst step = cfg.sequence[stepIdx];\nif (!step) return [{ json: { done: true, complete: true, lead } }];\nconst isInvite = step.type === 'invite';\n\nconst today = new Date().toISOString().slice(0, 10);\nconst key = cfg.account_id + '_' + today;\nconst cRow = $('Get counters').all().map(i => i.json).find(c => c.key === key) || { invites: 0, messages: 0 };\nconst used = isInvite ? Number(cRow.invites || 0) : Number(cRow.messages || 0);\nconst cap = isInvite ? cfg.invites_per_day : cfg.messages_per_day;\nif (used >= cap) return [{ json: { done: true, reason: 'cap reached' } }];\n\nconst next = cfg.sequence[stepIdx + 1];\nconst cd = Math.floor(cfg.cd_min + Math.random() * (cfg.cd_max - cfg.cd_min));\nreturn [{ json: {\n  done: false,\n  isInvite,\n  mode: step.mode,\n  promptOrText: step.mode === 'ai' ? step.prompt : step.text,\n  voice: cfg.voice,\n  account_id: cfg.account_id,\n  lead,\n  lead_row_number: lead.row_number,\n  new_step: stepIdx + 1,\n  new_state: isInvite ? 'awaiting_accept' : (next ? 'in_followup' : 'completed'),\n  new_next_run_at: isInvite ? '' : (next ? new Date(now + next.delay_hours * 3600000).toISOString() : ''),\n  new_updated_at: new Date(now).toISOString(),\n  counter_key: key,\n  counter_day: today,\n  new_invites: Number(cRow.invites || 0) + (isInvite ? 1 : 0),\n  new_messages: Number(cRow.messages || 0) + (isInvite ? 0 : 1),\n  config_row_number: cfgRow.row_number,\n  new_next_send_at: new Date(now + cd * 1000).toISOString(),\n} }];"
+      },
+      "id": "resolve",
+      "name": "Pick + resolve",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ -100, 300 ]
+    },
+    {
+      "parameters": {
+        "conditions": { "boolean": [ { "value1": "={{ $json.done }}", "operation": "false" } ] }
+      },
+      "id": "if-ready",
+      "name": "Ready to send?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [ 100, 300 ]
+    },
+    {
+      "parameters": {},
+      "id": "noop",
+      "name": "Idle (cap/cooldown/complete)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [ 100, 520 ]
+    },
+    {
+      "parameters": {
+        "conditions": { "string": [ { "value1": "={{ $json.mode }}", "operation": "equal", "value2": "ai" } ] }
+      },
+      "id": "if-mode",
+      "name": "AI or template?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [ 300, 260 ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "x-api-key", "value": "YOUR_ANTHROPIC_KEY" },
+          { "name": "anthropic-version", "value": "2023-06-01" },
+          { "name": "content-type", "value": "application/json" }
+        ] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-opus-4-8', max_tokens: 400, system: $json.voice, messages: [ { role: 'user', content: 'Write this LinkedIn ' + ($json.isInvite ? 'invite note (max 300 chars)' : 'message (50-120 words)') + '.\\nTASK: ' + $json.promptOrText + '\\nPROSPECT: ' + $json.lead.full_name + ' — ' + ($json.lead.title||'') + ' at ' + ($json.lead.company||'') + '. No emojis, no pitch, one question.' } ] }) }}"
+      },
+      "id": "http-ai",
+      "name": "Anthropic: generate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [ 520, 160 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('Pick + resolve').first().json;\nconst text = ($json.content && $json.content[0] && $json.content[0].text) ? $json.content[0].text.trim() : '';\nreturn [{ json: { ...r, text } }];"
+      },
+      "id": "ai-text",
+      "name": "Extract AI text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 720, 160 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('Pick + resolve').first().json;\nconst first = (r.lead.full_name || '').split(' ')[0] || '';\nconst text = (r.promptOrText || '').replace(/{{\\s*first_name\\s*}}/g, first);\nreturn [{ json: { ...r, text } }];"
+      },
+      "id": "tpl-text",
+      "name": "Render template",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 520, 380 ]
+    },
+    {
+      "parameters": {
+        "conditions": { "boolean": [ { "value1": "={{ $json.isInvite }}", "operation": "true" } ] }
+      },
+      "id": "if-type",
+      "name": "Invite or message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [ 940, 300 ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_DSN.unipile.com/api/v1/users/invite",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ account_id: $json.account_id, provider_id: $json.lead.provider_id, message: ($json.text || '').slice(0, 300) }) }}"
+      },
+      "id": "http-invite",
+      "name": "Unipile: send invite",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [ 1140, 200 ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_DSN.unipile.com/api/v1/chats",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": { "parameters": [
+          { "name": "account_id", "value": "={{ $json.account_id }}" },
+          { "name": "attendees_ids", "value": "={{ $json.lead.provider_id }}" },
+          { "name": "text", "value": "={{ $json.text }}" }
+        ] }
+      },
+      "id": "http-message",
+      "name": "Unipile: start chat / DM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [ 1140, 400 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('Pick + resolve').first().json;\nreturn [{ json: {\n  row_number: r.lead_row_number,\n  state: r.new_state,\n  step: r.new_step,\n  next_run_at: r.new_next_run_at,\n  updated_at: r.new_updated_at,\n} }];"
+      },
+      "id": "shape-lead",
+      "name": "Shape lead update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 1360, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": { "__rl": true, "value": "YOUR_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Leads", "mode": "name" },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [ "row_number" ]
+        },
+        "options": {}
+      },
+      "id": "upd-lead",
+      "name": "Update lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [ 1560, 300 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('Pick + resolve').first().json;\nreturn [{ json: {\n  key: r.counter_key,\n  account_id: r.account_id,\n  day: r.counter_day,\n  invites: r.new_invites,\n  messages: r.new_messages,\n} }];"
+      },
+      "id": "shape-counter",
+      "name": "Shape counter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 1760, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "value": "YOUR_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Counters", "mode": "name" },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [ "key" ]
+        },
+        "options": {}
+      },
+      "id": "bump-counter",
+      "name": "Bump counter",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [ 1960, 300 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('Pick + resolve').first().json;\nreturn [{ json: {\n  row_number: r.config_row_number,\n  next_send_at: r.new_next_send_at,\n} }];"
+      },
+      "id": "shape-cooldown",
+      "name": "Shape cooldown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 2160, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": { "__rl": true, "value": "YOUR_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Config", "mode": "name" },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [ "row_number" ]
+        },
+        "options": {}
+      },
+      "id": "upd-cooldown",
+      "name": "Start account cooldown",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [ 2360, 300 ]
+    }
+  ],
+  "connections": {
+    "Every 15 min": { "main": [ [ { "node": "Get config", "type": "main", "index": 0 } ] ] },
+    "Get config": { "main": [ [ { "node": "Get leads", "type": "main", "index": 0 } ] ] },
+    "Get leads": { "main": [ [ { "node": "Get counters", "type": "main", "index": 0 } ] ] },
+    "Get counters": { "main": [ [ { "node": "Pick + resolve", "type": "main", "index": 0 } ] ] },
+    "Pick + resolve": { "main": [ [ { "node": "Ready to send?", "type": "main", "index": 0 } ] ] },
+    "Ready to send?": { "main": [ [ { "node": "AI or template?", "type": "main", "index": 0 } ], [ { "node": "Idle (cap/cooldown/complete)", "type": "main", "index": 0 } ] ] },
+    "AI or template?": { "main": [ [ { "node": "Anthropic: generate", "type": "main", "index": 0 } ], [ { "node": "Render template", "type": "main", "index": 0 } ] ] },
+    "Anthropic: generate": { "main": [ [ { "node": "Extract AI text", "type": "main", "index": 0 } ] ] },
+    "Extract AI text": { "main": [ [ { "node": "Invite or message?", "type": "main", "index": 0 } ] ] },
+    "Render template": { "main": [ [ { "node": "Invite or message?", "type": "main", "index": 0 } ] ] },
+    "Invite or message?": { "main": [ [ { "node": "Unipile: send invite", "type": "main", "index": 0 } ], [ { "node": "Unipile: start chat / DM", "type": "main", "index": 0 } ] ] },
+    "Unipile: send invite": { "main": [ [ { "node": "Shape lead update", "type": "main", "index": 0 } ] ] },
+    "Unipile: start chat / DM": { "main": [ [ { "node": "Shape lead update", "type": "main", "index": 0 } ] ] },
+    "Shape lead update": { "main": [ [ { "node": "Update lead", "type": "main", "index": 0 } ] ] },
+    "Update lead": { "main": [ [ { "node": "Shape counter", "type": "main", "index": 0 } ] ] },
+    "Shape counter": { "main": [ [ { "node": "Bump counter", "type": "main", "index": 0 } ] ] },
+    "Bump counter": { "main": [ [ { "node": "Shape cooldown", "type": "main", "index": 0 } ] ] },
+    "Shape cooldown": { "main": [ [ { "node": "Start account cooldown", "type": "main", "index": 0 } ] ] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

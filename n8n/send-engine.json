@@ -1,0 +1,227 @@
+{
+  "name": "LinkedIn Campaign — WF2 Send Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [ { "field": "minutes", "minutesInterval": 15 } ] }
+      },
+      "id": "sched-1",
+      "name": "Every 15 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [ -640, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select * from campaign_config where id = 1;"
+      },
+      "id": "cfg-1",
+      "name": "Load config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [ -440, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select l.* from leads l join campaign_config c on c.account_id = l.account_id where l.state in ('queued','accepted','in_followup') and (l.next_run_at is null or l.next_run_at <= now()) and (c.next_send_at is null or c.next_send_at <= now()) order by l.next_run_at nulls first limit 1;"
+      },
+      "id": "pick-1",
+      "name": "Pick due lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [ -240, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select coalesce(invites,0) as invites, coalesce(messages,0) as messages from counters where account_id = $1 and day = current_date;",
+        "options": { "queryReplacement": "={{ $json.account_id }}" }
+      },
+      "id": "cnt-1",
+      "name": "Today counters",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [ -40, 300 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg  = $('Load config').first().json;\nconst lead = $('Pick due lead').first().json;\nconst cnt  = $input.first() ? $input.first().json : { invites: 0, messages: 0 };\nconst seq  = Array.isArray(cfg.sequence) ? cfg.sequence : JSON.parse(cfg.sequence || '[]');\nconst step = seq[lead.step];\nif (!step) return [{ json: { done: true, complete: true, lead } }];\nconst isInvite = step.type === 'invite';\nconst used = isInvite ? cnt.invites : cnt.messages;\nconst cap  = isInvite ? cfg.invites_per_day : cfg.messages_per_day;\nif (used >= cap) return [{ json: { done: true, capped: true } }];\nconst next = seq[lead.step + 1];\nconst minS = cfg.cooldown_min_sec, maxS = cfg.cooldown_max_sec;\nreturn [{ json: {\n  done: false,\n  lead,\n  isInvite,\n  mode: step.mode,\n  promptOrText: step.mode === 'ai' ? step.prompt : step.text,\n  voice: cfg.voice,\n  account_id: cfg.account_id,\n  hasNext: !!next,\n  nextDelayHours: next ? next.delay_hours : null,\n  cooldownSec: Math.floor(minS + Math.random() * (maxS - minS)),\n} }];"
+      },
+      "id": "resolve-1",
+      "name": "Resolve step + cap gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 160, 300 ]
+    },
+    {
+      "parameters": {
+        "conditions": { "boolean": [ { "value1": "={{ $json.done }}", "operation": "false" } ] }
+      },
+      "id": "if-done",
+      "name": "Ready to send?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [ 360, 300 ]
+    },
+    {
+      "parameters": {},
+      "id": "noop-1",
+      "name": "Idle (cap/cooldown/complete)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [ 360, 520 ]
+    },
+    {
+      "parameters": {
+        "conditions": { "string": [ { "value1": "={{ $json.mode }}", "operation": "equal", "value2": "ai" } ] }
+      },
+      "id": "if-mode",
+      "name": "AI or template?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [ 560, 260 ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "x-api-key", "value": "={{ $credentials?.anthropicApi?.apiKey || 'YOUR_ANTHROPIC_KEY' }}" },
+          { "name": "anthropic-version", "value": "2023-06-01" },
+          { "name": "content-type", "value": "application/json" }
+        ] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-opus-4-8', max_tokens: 400, system: $json.voice, messages: [ { role: 'user', content: 'Write this LinkedIn ' + ($json.isInvite ? 'invite note (max 300 chars)' : 'message (50-120 words)') + '.\\nTASK: ' + $json.promptOrText + '\\nPROSPECT: ' + $json.lead.full_name + ' — ' + ($json.lead.title||'') + ' at ' + ($json.lead.company||'') + '. No emojis, no pitch, one question.' } ] }) }}"
+      },
+      "id": "http-ai",
+      "name": "Anthropic: generate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [ 760, 180 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('Resolve step + cap gate').first().json;\nconst text = ($json.content && $json.content[0] && $json.content[0].text) ? $json.content[0].text.trim() : '';\nreturn [{ json: { ...r, text } }];"
+      },
+      "id": "ai-text",
+      "name": "Extract AI text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 960, 180 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\nconst first = (r.lead.full_name || '').split(' ')[0] || '';\nconst text = (r.promptOrText || '').replace(/{{\\s*first_name\\s*}}/g, first);\nreturn [{ json: { ...r, text } }];"
+      },
+      "id": "tpl-text",
+      "name": "Render template",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 760, 360 ]
+    },
+    {
+      "parameters": {
+        "conditions": { "boolean": [ { "value1": "={{ $json.isInvite }}", "operation": "true" } ] }
+      },
+      "id": "if-type",
+      "name": "Invite or message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [ 1180, 300 ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_DSN.unipile.com/api/v1/users/invite",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ account_id: $json.account_id, provider_id: $json.lead.provider_id, message: ($json.text || '').slice(0, 300) }) }}"
+      },
+      "id": "http-invite",
+      "name": "Unipile: send invite",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [ 1380, 200 ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://YOUR_DSN.unipile.com/api/v1/chats",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": { "parameters": [
+          { "name": "account_id", "value": "={{ $json.account_id }}" },
+          { "name": "attendees_ids", "value": "={{ $json.lead.provider_id }}" },
+          { "name": "text", "value": "={{ $json.text }}" }
+        ] }
+      },
+      "id": "http-message",
+      "name": "Unipile: start chat / DM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [ 1380, 400 ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into counters (account_id, day, invites, messages) values ($1, current_date, $2, $3) on conflict (account_id, day) do update set invites = counters.invites + excluded.invites, messages = counters.messages + excluded.messages;",
+        "options": { "queryReplacement": "={{ $('Resolve step + cap gate').first().json.account_id }},{{ $('Resolve step + cap gate').first().json.isInvite ? 1 : 0 }},{{ $('Resolve step + cap gate').first().json.isInvite ? 0 : 1 }}" }
+      },
+      "id": "pg-counter",
+      "name": "Counter ++",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [ 1600, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update leads set step = step + 1, state = case when $2 = 'true' then 'awaiting_accept' when $3 = 'true' then 'in_followup' else 'completed' end, next_run_at = case when $2 = 'true' then null when $3 = 'true' then now() + ($4 || ' hours')::interval else null end, updated_at = now() where id = $1;",
+        "options": { "queryReplacement": "={{ $('Resolve step + cap gate').first().json.lead.id }},{{ $('Resolve step + cap gate').first().json.isInvite }},{{ $('Resolve step + cap gate').first().json.hasNext }},{{ $('Resolve step + cap gate').first().json.nextDelayHours || 24 }}" }
+      },
+      "id": "pg-advance",
+      "name": "Advance lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [ 1800, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update campaign_config set next_send_at = now() + ($1 || ' seconds')::interval where id = 1;",
+        "options": { "queryReplacement": "={{ $('Resolve step + cap gate').first().json.cooldownSec }}" }
+      },
+      "id": "pg-cooldown",
+      "name": "Start account cooldown",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [ 2000, 300 ]
+    }
+  ],
+  "connections": {
+    "Every 15 min": { "main": [ [ { "node": "Load config", "type": "main", "index": 0 } ] ] },
+    "Load config": { "main": [ [ { "node": "Pick due lead", "type": "main", "index": 0 } ] ] },
+    "Pick due lead": { "main": [ [ { "node": "Today counters", "type": "main", "index": 0 } ] ] },
+    "Today counters": { "main": [ [ { "node": "Resolve step + cap gate", "type": "main", "index": 0 } ] ] },
+    "Resolve step + cap gate": { "main": [ [ { "node": "Ready to send?", "type": "main", "index": 0 } ] ] },
+    "Ready to send?": { "main": [ [ { "node": "AI or template?", "type": "main", "index": 0 } ], [ { "node": "Idle (cap/cooldown/complete)", "type": "main", "index": 0 } ] ] },
+    "AI or template?": { "main": [ [ { "node": "Anthropic: generate", "type": "main", "index": 0 } ], [ { "node": "Render template", "type": "main", "index": 0 } ] ] },
+    "Anthropic: generate": { "main": [ [ { "node": "Extract AI text", "type": "main", "index": 0 } ] ] },
+    "Extract AI text": { "main": [ [ { "node": "Invite or message?", "type": "main", "index": 0 } ] ] },
+    "Render template": { "main": [ [ { "node": "Invite or message?", "type": "main", "index": 0 } ] ] },
+    "Invite or message?": { "main": [ [ { "node": "Unipile: send invite", "type": "main", "index": 0 } ], [ { "node": "Unipile: start chat / DM", "type": "main", "index": 0 } ] ] },
+    "Unipile: send invite": { "main": [ [ { "node": "Counter ++", "type": "main", "index": 0 } ] ] },
+    "Unipile: start chat / DM": { "main": [ [ { "node": "Counter ++", "type": "main", "index": 0 } ] ] },
+    "Counter ++": { "main": [ [ { "node": "Advance lead", "type": "main", "index": 0 } ] ] },
+    "Advance lead": { "main": [ [ { "node": "Start account cooldown", "type": "main", "index": 0 } ] ] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

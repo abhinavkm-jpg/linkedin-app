@@ -127,6 +127,42 @@ export async function processEnrollment(enr: Enrollment): Promise<boolean> {
     }
   }
 
+  // Dedup guard: for "unique DMs" campaigns, never open a NEW conversation with
+  // someone we already have a chat with (a prior campaign, an earlier reply, or a
+  // manual DM). Only bites on this enrollment's FIRST message — an in-flight
+  // sequence (welcome already sent) keeps going normally.
+  if (step.type === "message" && camp.dedupeContacts) {
+    const [alreadySentHere] = await db
+      .select({ id: activities.id })
+      .from(activities)
+      .where(
+        and(
+          eq(activities.enrollmentId, enr.id),
+          eq(activities.type, "message"),
+          eq(activities.status, "success"),
+        ),
+      )
+      .limit(1);
+    if (!alreadySentHere) {
+      const [existingChat] = await db
+        .select({ id: chats.id })
+        .from(chats)
+        .where(eq(chats.connectionId, conn.id))
+        .limit(1);
+      if (existingChat) {
+        await db
+          .update(enrollments)
+          .set({
+            state: "skipped",
+            lastError: "Already in conversation — skipped to avoid a duplicate DM",
+            updatedAt: new Date(),
+          })
+          .where(eq(enrollments.id, enr.id));
+        return false;
+      }
+    }
+  }
+
   const kind = step.type === "invite" ? "invite" : "message";
   if (!(await canSend(account.id, kind))) {
     await db
