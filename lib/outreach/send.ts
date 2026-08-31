@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   enrollments,
@@ -144,10 +144,14 @@ export async function processEnrollment(enr: Enrollment): Promise<boolean> {
       )
       .limit(1);
     if (!alreadySentHere) {
+      // Match an existing conversation by the linked connection OR by the
+      // attendee's provider id (imported/manual chats may not be linked yet).
+      const chatConds = [eq(chats.connectionId, conn.id)];
+      if (conn.providerId) chatConds.push(eq(chats.attendeeProviderId, conn.providerId));
       const [existingChat] = await db
         .select({ id: chats.id })
         .from(chats)
-        .where(eq(chats.connectionId, conn.id))
+        .where(or(...chatConds))
         .limit(1);
       if (existingChat) {
         await db

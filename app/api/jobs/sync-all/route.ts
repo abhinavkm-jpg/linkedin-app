@@ -32,5 +32,9 @@ export async function POST(req: Request) {
     await enqueueJob("sync", { accountId: a.id });
   }
 
+  // Also refresh the imported-conversations cache so campaign dedupe stays aware
+  // of everyone we've already talked to (including manual threads).
+  await enqueueJob("import-chats", {});
+
   return NextResponse.json({ ok: true, kicked: accounts.length });
 }

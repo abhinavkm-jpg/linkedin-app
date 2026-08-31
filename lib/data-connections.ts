@@ -199,7 +199,15 @@ export async function getIcpMatches(
         db
           .select({ x: sql`1` })
           .from(chats)
-          .where(eq(chats.connectionId, connections.id)),
+          .where(
+            or(
+              eq(chats.connectionId, connections.id),
+              and(
+                isNotNull(connections.providerId),
+                eq(chats.attendeeProviderId, connections.providerId),
+              ),
+            ),
+          ),
       ),
     );
   }
