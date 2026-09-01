@@ -184,6 +184,9 @@ export const contentAssets = pgTable(
     url: text("url").notNull(),
     title: text("title"),
     section: text("section"), // first path segment, e.g. "blog", "marketing-glossary"
+    // Publish/updated date from the sitemap's <lastmod>, when present. Lets us
+    // prefer the freshest article when sharing content.
+    lastmod: timestamp("lastmod", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

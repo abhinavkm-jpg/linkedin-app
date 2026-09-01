@@ -197,22 +197,55 @@ async function fetchSitemapText(url: string): Promise<string> {
   return res.text();
 }
 
-/** Crawl a sitemap (following one level of sitemap-index) into a de-duped URL list. */
-async function crawlSitemap(url: string, depth = 0): Promise<string[]> {
+type SitemapEntry = { url: string; lastmod: string | null };
+
+/** Crawl a sitemap (following one level of sitemap-index) into de-duped entries. */
+async function crawlSitemap(url: string, depth = 0): Promise<SitemapEntry[]> {
   const xml = await fetchSitemapText(url);
-  const locs = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1].trim());
+
+  // Sitemap index → recurse into each child sitemap.
   if (/<sitemapindex/i.test(xml) && depth < 2) {
-    const all: string[] = [];
-    for (const child of locs.slice(0, 50)) {
+    const children = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1].trim());
+    const all: SitemapEntry[] = [];
+    for (const child of children.slice(0, 50)) {
       try {
         all.push(...(await crawlSitemap(child, depth + 1)));
       } catch {
         /* skip a bad child sitemap */
       }
     }
-    return [...new Set(all)];
+    return dedupeEntries(all);
   }
-  return [...new Set(locs.filter((u) => /^https?:\/\//i.test(u)))];
+
+  // urlset → pair each <loc> with its sibling <lastmod> inside the same <url> block.
+  const entries: SitemapEntry[] = [];
+  for (const block of xml.matchAll(/<url\b[^>]*>([\s\S]*?)<\/url>/gi)) {
+    const seg = block[1];
+    const loc = seg.match(/<loc>\s*([^<\s]+)\s*<\/loc>/i)?.[1]?.trim();
+    if (!loc || !/^https?:\/\//i.test(loc)) continue;
+    const lastmod = seg.match(/<lastmod>\s*([^<\s]+)\s*<\/lastmod>/i)?.[1]?.trim() ?? null;
+    entries.push({ url: loc, lastmod });
+  }
+  // Fallback for flat sitemaps with bare <loc> tags (no <url> wrappers).
+  if (entries.length === 0) {
+    for (const m of xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
+      const loc = m[1].trim();
+      if (/^https?:\/\//i.test(loc)) entries.push({ url: loc, lastmod: null });
+    }
+  }
+  return dedupeEntries(entries);
+}
+
+function dedupeEntries(entries: SitemapEntry[]): SitemapEntry[] {
+  const seen = new Map<string, SitemapEntry>();
+  for (const e of entries) if (!seen.has(e.url)) seen.set(e.url, e);
+  return [...seen.values()];
+}
+
+function parseLastmod(v: string | null): Date | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 export async function setSitemapUrl(accountId: string, url: string): Promise<void> {
@@ -246,9 +279,15 @@ export async function importContentFromSitemap(
   if (!acct?.sitemapUrl) return { imported: 0, sections: [], error: "Set a sitemap URL first." };
 
   try {
-    const urls = await crawlSitemap(acct.sitemapUrl);
-    const values = urls
-      .map((u) => ({ accountId, url: u, section: sectionFromUrl(u), title: titleFromUrl(u) }))
+    const entries = await crawlSitemap(acct.sitemapUrl);
+    const values = entries
+      .map((e) => ({
+        accountId,
+        url: e.url,
+        section: sectionFromUrl(e.url),
+        title: titleFromUrl(e.url),
+        lastmod: parseLastmod(e.lastmod),
+      }))
       .filter((v) => v.section); // skip the bare homepage
     for (let i = 0; i < values.length; i += 500) {
       const chunk = values.slice(i, i + 500);
@@ -257,7 +296,7 @@ export async function importContentFromSitemap(
         .values(chunk)
         .onConflictDoUpdate({
           target: [contentAssets.accountId, contentAssets.url],
-          set: { title: sql`excluded.title`, section: sql`excluded.section` },
+          set: { title: sql`excluded.title`, section: sql`excluded.section`, lastmod: sql`excluded.lastmod` },
         });
     }
     const sections = await db

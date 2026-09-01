@@ -43,24 +43,26 @@ export async function pickRelevantAssets(
   if (sections.length === 0) return [];
 
   const assets = await db
-    .select({ title: contentAssets.title, url: contentAssets.url })
+    .select({ title: contentAssets.title, url: contentAssets.url, lastmod: contentAssets.lastmod })
     .from(contentAssets)
     .where(and(eq(contentAssets.accountId, accountId), inArray(contentAssets.section, sections)));
-  const usable = assets.filter((a): a is PickedAsset => !!a.title && !!a.url);
+  const usable = assets.filter((a) => !!a.title && !!a.url);
   if (usable.length === 0) return [];
 
   const terms = tokenize(
     `${prospect.headline ?? ""} ${prospect.position ?? ""} ${prospect.company ?? ""} ${prospect.summary ?? ""}`,
   );
+  const when = (d: Date | null) => (d ? d.getTime() : 0);
   const scored = usable.map((a) => {
-    const t = tokenize(a.title);
+    const t = tokenize(a.title ?? "");
     let score = 0;
     for (const w of t) if (terms.has(w)) score += 1;
     return { a, score };
   });
-  scored.sort((x, y) => y.score - x.score);
-  // Even when nothing overlaps, return a few so the model has options to choose from.
-  return scored.slice(0, limit).map((s) => s.a);
+  // Rank by relevance, then by freshness — so among equally-relevant articles
+  // (and when nothing overlaps) the newest published one wins.
+  scored.sort((x, y) => y.score - x.score || when(y.a.lastmod) - when(x.a.lastmod));
+  return scored.slice(0, limit).map((s) => ({ title: s.a.title as string, url: s.a.url }));
 }
 
 /** Task-message instruction telling the model to reference one real article URL. */

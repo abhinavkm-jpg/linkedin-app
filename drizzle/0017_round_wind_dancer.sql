@@ -1,0 +1,1 @@
+ALTER TABLE "content_assets" ADD COLUMN "lastmod" timestamp with time zone;
