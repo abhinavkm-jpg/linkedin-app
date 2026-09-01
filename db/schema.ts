@@ -184,9 +184,12 @@ export const contentAssets = pgTable(
     url: text("url").notNull(),
     title: text("title"),
     section: text("section"), // first path segment, e.g. "blog", "marketing-glossary"
-    // Publish/updated date from the sitemap's <lastmod>, when present. Lets us
-    // prefer the freshest article when sharing content.
+    // Publish date. Sitemap <lastmod> is often unreliable (a site may stamp every
+    // URL with the sitemap's regeneration time), so we verify the real date from
+    // the article page (JSON-LD datePublished). `dateVerified` marks a real,
+    // page-confirmed date — only those are trusted for the freshness cutoff.
     lastmod: timestamp("lastmod", { withTimezone: true }),
+    dateVerified: boolean("date_verified").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

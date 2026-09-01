@@ -294,9 +294,12 @@ export async function importContentFromSitemap(
       await db
         .insert(contentAssets)
         .values(chunk)
+        // Don't overwrite a page-verified date with the (unreliable) sitemap
+        // date on re-import; new rows still get the sitemap date on insert and
+        // are verified from the page later by the content-dates job.
         .onConflictDoUpdate({
           target: [contentAssets.accountId, contentAssets.url],
-          set: { title: sql`excluded.title`, section: sql`excluded.section`, lastmod: sql`excluded.lastmod` },
+          set: { title: sql`excluded.title`, section: sql`excluded.section` },
         });
     }
     const sections = await db
@@ -343,8 +346,10 @@ export async function addContentUrls(
 ): Promise<{ imported: number; sections: { section: string; n: number }[]; error?: string }> {
   await requireAdmin();
   const clean = [...new Set(urls.map((u) => u.trim()).filter((u) => /^https?:\/\//i.test(u)))];
+  // Manually added now → treat as fresh, so the freshness cutoff doesn't exclude them.
+  const now = new Date();
   const values = clean
-    .map((u) => ({ accountId, url: u, section: sectionFromUrl(u), title: titleFromUrl(u) }))
+    .map((u) => ({ accountId, url: u, section: sectionFromUrl(u), title: titleFromUrl(u), lastmod: now, dateVerified: true }))
     .filter((v) => v.section); // skip the bare homepage
   if (values.length === 0) {
     return { imported: 0, sections: await getContentSectionsRaw(accountId), error: "No valid http(s) URLs with a path were found." };

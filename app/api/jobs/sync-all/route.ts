@@ -35,6 +35,8 @@ export async function POST(req: Request) {
   // Also refresh the imported-conversations cache so campaign dedupe stays aware
   // of everyone we've already talked to (including manual threads).
   await enqueueJob("import-chats", {});
+  // …and verify article publish dates so content-sharing stays fresh.
+  await enqueueJob("content-dates", {});
 
   return NextResponse.json({ ok: true, kicked: accounts.length });
 }

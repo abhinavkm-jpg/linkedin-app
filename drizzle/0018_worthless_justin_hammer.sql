@@ -1,0 +1,1 @@
+ALTER TABLE "content_assets" ADD COLUMN "date_verified" boolean DEFAULT false NOT NULL;

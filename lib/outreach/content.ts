@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { contentAssets, linkedinAccounts } from "@/db/schema";
 import type { ProspectContext } from "@/lib/ai/generate";
@@ -8,6 +8,13 @@ export interface PickedAsset {
   title: string;
   url: string;
 }
+
+/**
+ * Only ever share content published within this window — never old articles.
+ * Assets with no known publish date (`lastmod`) are excluded, so we never share
+ * something whose age we can't verify.
+ */
+export const CONTENT_MAX_AGE_DAYS = 365;
 
 const STOP = new Set([
   "the", "and", "for", "with", "your", "our", "you", "are", "how", "why", "what", "from",
@@ -42,12 +49,21 @@ export async function pickRelevantAssets(
   const sections = acct?.sections ?? [];
   if (sections.length === 0) return [];
 
+  // Hard freshness cutoff: only articles published within the window are eligible.
+  const cutoff = new Date(Date.now() - CONTENT_MAX_AGE_DAYS * 24 * 60 * 60 * 1000);
   const assets = await db
     .select({ title: contentAssets.title, url: contentAssets.url, lastmod: contentAssets.lastmod })
     .from(contentAssets)
-    .where(and(eq(contentAssets.accountId, accountId), inArray(contentAssets.section, sections)));
+    .where(
+      and(
+        eq(contentAssets.accountId, accountId),
+        inArray(contentAssets.section, sections),
+        eq(contentAssets.dateVerified, true), // only page-confirmed dates are trusted
+        gte(contentAssets.lastmod, cutoff), // excludes older + undated assets
+      ),
+    );
   const usable = assets.filter((a) => !!a.title && !!a.url);
-  if (usable.length === 0) return [];
+  if (usable.length === 0) return []; // nothing fresh → share no link rather than an old one
 
   const terms = tokenize(
     `${prospect.headline ?? ""} ${prospect.position ?? ""} ${prospect.company ?? ""} ${prospect.summary ?? ""}`,

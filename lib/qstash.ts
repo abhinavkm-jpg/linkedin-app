@@ -12,7 +12,8 @@ export type JobName =
   | "auto-enroll"
   | "auto-enrich"
   | "comment-dm"
-  | "import-chats";
+  | "import-chats"
+  | "content-dates";
 
 /**
  * Enqueue a background job via QStash, which POSTs to our signed job endpoint.
@@ -51,6 +52,7 @@ function wantedSchedules(base: string) {
     { path: "auto-enrich", cron: "10 0 * * *" }, // daily kickstart; the job self-paces ~1/min
     { path: "sync-all", cron: "0 2 * * *" }, // daily connection resync (detect new connections)
     { path: "import-chats", cron: "30 2 * * *" }, // daily: import existing conversations for dedupe
+    { path: "content-dates", cron: "45 2 * * *" }, // daily: verify article publish dates for freshness
     { path: "poll-acceptance", cron: "0 9,13,17 * * *" }, // backup accept detection
   ].map((w) => ({ ...w, destination: `${base}/api/jobs/${w.path}` }));
 }
