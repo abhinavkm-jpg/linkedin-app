@@ -14,7 +14,7 @@ export interface PickedAsset {
  * Assets with no known publish date (`lastmod`) are excluded, so we never share
  * something whose age we can't verify.
  */
-export const CONTENT_MAX_AGE_DAYS = 365;
+export const CONTENT_MAX_AGE_DAYS = 183; // ~6 months
 
 const STOP = new Set([
   "the", "and", "for", "with", "your", "our", "you", "are", "how", "why", "what", "from",
