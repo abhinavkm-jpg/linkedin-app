@@ -332,20 +332,21 @@ interested, problem_identified, qualified_opportunity, meeting_ready, question, 
 2) Choose the sales STAGE the conversation should be in now (given the current stage + their latest reply):
 new_response, engaging, qualifying, meeting_opportunity, meeting_booked, discovery_completed, proposal, negotiation, won, lost.
 
-3) Draft the NEXT reply the account holder should send, following this playbook:
-- Positive but no specific need yet -> continue the conversation: acknowledge, add one relevant value point, ask ONE useful qualifying question. Do NOT push a meeting.
-- They mention a problem / goal / challenge -> acknowledge it, show relevant understanding, ask ONE concise question. Don't pitch everything.
-- Clearly qualified (a real problem we can help with + business relevance) -> transition toward a meeting: connect their situation -> a relevant outcome -> a short call. Make the meeting the logical next step, never a generic "book a demo".
-- Ready to meet -> a concise 15-30 minute invite that explains why it's useful to THEM.
-- Objection -> address it directly and briefly; keep the door open.
+3) Draft the NEXT reply. YOUR GOAL is to advance every conversation toward a booked meeting: qualify, surface an opportunity, and propose a call. Move it forward each turn — never idle in polite small talk. Playbook:
+- First friendly/positive reply, need not clear yet -> warmly acknowledge, add ONE relevant insight, and ask ONE sharp question that surfaces their current approach, goal, or challenge (start qualifying). Don't open with a meeting ask.
+- They reveal a problem/goal/challenge, OR show real curiosity, OR the thread already has a couple of friendly exchanges -> transition to a meeting: tie their situation to a concrete outcome and propose a specific, low-friction short call (15 min), offering to work around their schedule. Don't wait for "perfect" qualification to suggest talking.
+- Ready to meet -> a concise 15-30 minute invite framed around what THEY get; offer a couple of time options.
+- Objection -> address it directly and briefly, keep the door open, and still aim to advance.
 - They clearly declined / said not interested -> a short, gracious close; do not push.
-- Ignored a prior meeting invite -> a low-pressure follow-up with a new useful reason and an easy yes/no.
+- Ignored a prior meeting invite -> a low-pressure nudge with a new useful reason and an easy yes/no.
+
+MOMENTUM: advance the stage whenever the reply supports it (new_response -> engaging -> qualifying -> meeting_opportunity -> meeting_booked). Do NOT stay in "engaging" for more than ~2 exchanges without either qualifying or proposing a call. The more back-and-forth that has already happened, the more you should steer toward a meeting rather than keep chatting.
 
 CRITICAL GUARDRAILS (do not get these wrong):
 - If the person asks to meet, agrees to a call, proposes/accepts a time, or clearly wants to talk, that is meeting_ready. ALWAYS move toward the meeting (propose a short call and offer to work around their schedule). NEVER decline, pass, or close someone who wants to talk.
 - Use "not_interested" ONLY when THEY explicitly decline. Use "not_relevant" ONLY for spam, wrong-person, or a message with no business relevance at all.
 - Do NOT disqualify someone based on their company, industry, or job title. Deciding a lead is a poor fit is the human's call, never yours. A prospect at a big or unrelated-looking company who engages is still a live conversation.
-- When unsure, keep the conversation going (engaging). Never draft a "pass"/"close" for a warm, curious, or neutral reply.
+- When unsure, keep the conversation alive AND move it forward — ask a qualifying question or suggest a quick call. Never draft a "pass"/"close" for a warm, curious, or neutral reply, and never just idle either.
 - If they are pitching us, stay warm and curious and steer toward mutual relevance; only decline if they push a clear sale we obviously don't want.
 - Stage "meeting_booked" is ONLY for a confirmed date/time. If they merely agreed to meet or asked to talk, use "meeting_opportunity" (intent can still be meeting_ready).
 
@@ -396,6 +397,12 @@ export async function draftPipelineReply(opts: {
       .slice(-14)
       .map((m) => `${m.from === "me" ? "Me" : "Them"}: ${m.text}`)
       .join("\n");
+    const ourTurns = opts.priorMessages.filter((m) => m.from === "me").length;
+    const theirTurns = opts.priorMessages.filter((m) => m.from === "them").length;
+    const depthNote =
+      theirTurns >= 2 || ourTurns >= 2
+        ? "This is not the first exchange — steer toward a meeting now rather than just continuing the chat."
+        : "Early in the conversation — qualify with a sharp question before proposing a meeting.";
     const parts = [
       `WHO WE ARE / VOICE:\n${opts.voice?.trim() || "A B2B demand-generation and campaign-execution partner."}`,
       ...(opts.strategy?.trim()
@@ -409,6 +416,8 @@ export async function draftPipelineReply(opts: {
       "",
       "Conversation so far (oldest first):",
       thread || "(no prior messages captured)",
+      "",
+      `Conversation depth: ${ourTurns} from us, ${theirTurns} from them. ${depthNote}`,
       "",
       `Their latest message: """${lastInbound}"""`,
       "",
