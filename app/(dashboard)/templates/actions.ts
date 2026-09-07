@@ -347,6 +347,29 @@ export async function previewAiMessage(input: {
       if (assets.length > 0) instructions = contentInstruction(assets);
       else contentMissing = true;
     }
+    // Closing step signs off with the account owner's real name — resolve it from
+    // the chosen account, else the picked connection's account (never let the model
+    // invent a name in the preview).
+    let signOffName: string | undefined;
+    if (input.step === "follow_up_3") {
+      let acctId = input.accountId;
+      if (!acctId && input.connectionId) {
+        const [c] = await db
+          .select({ accountId: connections.accountId })
+          .from(connections)
+          .where(eq(connections.id, input.connectionId))
+          .limit(1);
+        acctId = c?.accountId;
+      }
+      if (acctId) {
+        const [a] = await db
+          .select({ name: linkedinAccounts.name })
+          .from(linkedinAccounts)
+          .where(eq(linkedinAccounts.id, acctId))
+          .limit(1);
+        signOffName = a?.name?.trim().split(/\s+/)[0];
+      }
+    }
     const res = await generateMessage({
       step: input.step,
       systemPrompt: input.systemPrompt,
@@ -354,6 +377,7 @@ export async function previewAiMessage(input: {
       model: input.model,
       prospect,
       instructions,
+      signOffName,
     });
     return { text: res.text, bannedWordsFound: res.bannedWordsFound, contentMissing };
   } catch (e) {

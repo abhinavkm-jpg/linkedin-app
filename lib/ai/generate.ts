@@ -136,6 +136,8 @@ export interface GenerateOptions {
   instructions?: string;
   /** Company differentiators — the model may weave in ONE matched credibility line. */
   credibilityBank?: string;
+  /** For the closing step only: the exact first name to sign off with. */
+  signOffName?: string;
   /**
    * What this specific message should do (the stage's job). Overrides the
    * built-in STEP_INSTRUCTIONS when provided — the layered model pairs the
@@ -183,6 +185,13 @@ export async function generateMessage(opts: GenerateOptions): Promise<GeneratedM
   }
   if (opts.instructions) {
     parts.push("", `Additional guidance: ${opts.instructions}`);
+  }
+  // Closing step signs off with the account owner's real first name — never invent one.
+  if (opts.step === "follow_up_3" && opts.signOffName?.trim()) {
+    parts.push(
+      "",
+      `Sign off with ONLY the first name "${opts.signOffName.trim()}" on its own line at the end. Do NOT use any other name, company name, or sign-off.`,
+    );
   }
   parts.push(
     "",

@@ -446,14 +446,6 @@ export async function resolveStepText(
       const assets = await pickRelevantAssets(camp.accountId, prospect, 5);
       if (assets.length > 0) instructions = contentInstruction(assets);
     }
-    // DM4 (breakup + soft meeting ask) signs off with the account owner's first name.
-    if (stage === "follow_up_3" && acct?.name?.trim()) {
-      const firstName = acct.name.trim().split(/\s+/)[0];
-      instructions = [instructions, `Sign off with just the first name "${firstName}".`]
-        .filter(Boolean)
-        .join(" ");
-    }
-
     // Feed the real thread so follow-ups build on what was already said, never
     // repeat it. The invite has no chat yet, so skip it there.
     const priorMessages = step.type === "invite" ? undefined : await getPriorMessages(conn.id);
@@ -466,6 +458,8 @@ export async function resolveStepText(
       model,
       instructions,
       credibilityBank: shouldShare ? acct?.differentiators ?? undefined : undefined,
+      // DM4 signs off with the account owner's real first name — never invented.
+      signOffName: acct?.name?.trim().split(/\s+/)[0],
       priorMessages,
     });
     return res.text;
