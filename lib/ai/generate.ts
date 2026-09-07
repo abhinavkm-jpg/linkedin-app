@@ -186,11 +186,11 @@ export async function generateMessage(opts: GenerateOptions): Promise<GeneratedM
   if (opts.instructions) {
     parts.push("", `Additional guidance: ${opts.instructions}`);
   }
-  // Closing step signs off with the account owner's real first name — never invent one.
+  // Closing step signs off with "Thanks," + the account owner's real first name.
   if (opts.step === "follow_up_3" && opts.signOffName?.trim()) {
     parts.push(
       "",
-      `Sign off with ONLY the first name "${opts.signOffName.trim()}" on its own line at the end. Do NOT use any other name, company name, or sign-off.`,
+      `End the message with a sign-off of exactly "Thanks," on one line and "${opts.signOffName.trim()}" on the next line. Do NOT use any other name, company name, or closing.`,
     );
   }
   parts.push(
