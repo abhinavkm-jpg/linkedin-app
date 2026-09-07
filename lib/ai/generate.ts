@@ -51,6 +51,8 @@ export interface ProspectContext {
   locationCountry?: string | null;
   summary?: string | null;
   experience?: Array<{ position?: string | null; company?: string | null }>;
+  segmentVertical?: string | null;
+  segmentTier?: string | null;
 }
 
 const STEP_INSTRUCTIONS: Record<OutreachStep, string> = {
@@ -63,7 +65,7 @@ const STEP_INSTRUCTIONS: Record<OutreachStep, string> = {
   follow_up_2:
     "Continue the conversation. Seek to understand their current process, priorities, or challenges. Do not present solutions yet. 50-120 words.",
   follow_up_3:
-    "If there is genuine engagement, connect their challenge to a pattern seen across client engagements. You may reference credibility lightly. Keep the focus on their business outcome. 50-120 words.",
+    "Closing message that doubles as a soft meeting ask. Briefly reference the sequence so they have context, then make ONE low-friction ask: a short 20-minute call to compare notes on what they're seeing in demand gen. No hard CTA, no calendar link, no pressure. Do NOT write them off: no 'good luck', no apology, no 'sorry to bother you'. Keep it UNDER 300 characters. End with just your first name on its own line.",
 };
 
 function buildProspectBlock(p: ProspectContext): string {
@@ -74,6 +76,9 @@ function buildProspectBlock(p: ProspectContext): string {
   if (p.position) lines.push(`Current role: ${p.position}`);
   if (p.company) lines.push(`Company: ${p.company}`);
   if (p.locationCountry) lines.push(`Country: ${p.locationCountry}`);
+  if (p.segmentVertical || p.segmentTier) {
+    lines.push(`Segment: ${[p.segmentVertical, p.segmentTier].filter(Boolean).join(" / ")}`);
+  }
   if (p.summary) lines.push(`About: ${p.summary}`);
   if (p.experience?.length) {
     const exp = p.experience
@@ -129,6 +134,8 @@ export interface GenerateOptions {
   priorMessages?: Array<{ from: "me" | "them"; text: string }>;
   /** Extra guidance for this specific message. */
   instructions?: string;
+  /** Company differentiators — the model may weave in ONE matched credibility line. */
+  credibilityBank?: string;
   /**
    * What this specific message should do (the stage's job). Overrides the
    * built-in STEP_INSTRUCTIONS when provided — the layered model pairs the
@@ -166,6 +173,13 @@ export async function generateMessage(opts: GenerateOptions): Promise<GeneratedM
     for (const m of opts.priorMessages) {
       parts.push(`${m.from === "me" ? "Me" : "Them"}: ${m.text}`);
     }
+  }
+  if (opts.credibilityBank?.trim()) {
+    parts.push(
+      "",
+      "MACHINTEL DIFFERENTIATORS (context for a credibility line — use AT MOST ONE, only the one that fits this prospect's situation/vertical; phrase it in the voice, never dump the list):",
+      opts.credibilityBank.trim(),
+    );
   }
   if (opts.instructions) {
     parts.push("", `Additional guidance: ${opts.instructions}`);
@@ -324,6 +338,84 @@ export async function classifyReply(
   }
 }
 
+export const SEGMENT_VERTICALS = [
+  "cybersecurity",
+  "agency",
+  "saas",
+  "ai_ml",
+  "hr_tech",
+  "legal_finance",
+  "general_b2b",
+] as const;
+export type SegmentVertical = (typeof SEGMENT_VERTICALS)[number];
+export type SegmentTier = "ATL" | "BTL";
+export interface Segment {
+  vertical: SegmentVertical;
+  tier: SegmentTier;
+}
+
+const SEGMENT_SYSTEM = `You classify a B2B LinkedIn prospect into a marketing outreach segment from their role and company.
+
+VERTICAL — pick ONE:
+- cybersecurity: security / infosec vendors and teams
+- agency: marketing agencies, consultancies, or service providers (they deliver for clients)
+- saas: general B2B software / SaaS product companies
+- ai_ml: AI / ML / data-platform companies
+- hr_tech: HR, L&D, LMS, workforce, recruiting tech
+- legal_finance: legal tech, CLM, fintech, finance/procurement tech
+- general_b2b: any other B2B company (default when unsure)
+
+TIER — seniority:
+- ATL: C-suite, VP, SVP, Director, Head, Owner, Founder, Managing Director / MD
+- BTL: Manager, Lead, Specialist, Coordinator, Account Lead, and other individual contributors
+
+Respond with ONLY compact JSON: {"vertical":"<one>","tier":"ATL"|"BTL"}`;
+
+/** Classify a prospect into {vertical, tier}. Defaults to general_b2b / BTL. */
+export async function classifySegment(input: {
+  headline?: string | null;
+  position?: string | null;
+  company?: string | null;
+  summary?: string | null;
+}): Promise<Segment> {
+  const fallback: Segment = { vertical: "general_b2b", tier: "BTL" };
+  try {
+    const anthropic = await client();
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 60,
+      system: SEGMENT_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: [
+            input.position ? `Role: ${input.position}` : "",
+            input.headline ? `Headline: ${input.headline}` : "",
+            input.company ? `Company: ${input.company}` : "",
+            input.summary ? `About: ${input.summary.slice(0, 500)}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n") || "(no data)",
+        },
+      ],
+    });
+    const txt = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("");
+    const match = txt.match(/\{[\s\S]*\}/);
+    if (!match) return fallback;
+    const parsed = JSON.parse(match[0]) as Partial<Segment>;
+    const vertical = SEGMENT_VERTICALS.includes(parsed.vertical as SegmentVertical)
+      ? (parsed.vertical as SegmentVertical)
+      : "general_b2b";
+    const tier: SegmentTier = parsed.tier === "ATL" ? "ATL" : "BTL";
+    return { vertical, tier };
+  } catch {
+    return fallback;
+  }
+}
+
 const PIPELINE_SYSTEM = `You are a senior B2B sales assistant helping the account holder reply to LinkedIn connections who responded to their outreach. Do all of the following, then return JSON only.
 
 1) CLASSIFY the prospect's latest reply into exactly one intent:
@@ -379,6 +471,8 @@ export async function draftPipelineReply(opts: {
   voice?: string;
   /** Offer + qualification + how-to-advance context (the account's reply strategy). */
   strategy?: string;
+  /** Company differentiators — for a credibility line when proposing a call. */
+  differentiators?: string;
   /** Their newest inbound message — used as a fallback if history couldn't be fetched. */
   latestInbound?: string;
 }): Promise<PipelineDraft> {
@@ -409,6 +503,12 @@ export async function draftPipelineReply(opts: {
       `WHO WE ARE / VOICE:\n${opts.voice?.trim() || "A B2B demand-generation and campaign-execution partner."}`,
       ...(opts.strategy?.trim()
         ? ["", `SALES STRATEGY & QUALIFICATION:\n${opts.strategy.trim()}`]
+        : []),
+      ...(opts.differentiators?.trim()
+        ? [
+            "",
+            `MACHINTEL DIFFERENTIATORS (use AT MOST ONE, only when it strengthens the point or when proposing a call; match it to the prospect; never dump the list):\n${opts.differentiators.trim()}`,
+          ]
         : []),
       "",
       `Current stage: ${opts.currentStage}`,

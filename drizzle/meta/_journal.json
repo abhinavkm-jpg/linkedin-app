@@ -134,6 +134,13 @@
       "when": 1788237475071,
       "tag": "0018_worthless_justin_hammer",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788773906765,
+      "tag": "0019_neat_the_professor",
+      "breakpoints": true
     }
   ]
 }

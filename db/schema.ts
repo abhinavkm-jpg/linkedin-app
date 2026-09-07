@@ -151,6 +151,9 @@ export const linkedinAccounts = pgTable(
     // (offer, who's a fit, how to advance, meeting preference). Layered on top of
     // the voice + the built-in stage playbook.
     replyStrategy: text("reply_strategy"),
+    // Company differentiators / credibility bank. Drawn on for the DM3 credibility
+    // line and reply drafts (use at most one, matched to the prospect). Free text.
+    differentiators: text("differentiators"),
     // Content library: sitemap to crawl + which URL sections are shareable in
     // content-sharing follow-ups (e.g. {"blog"}).
     sitemapUrl: text("sitemap_url"),
@@ -249,6 +252,9 @@ export const connections = pgTable(
     locationCountryCode: text("location_country_code"), // ISO2 code derived from the name
     company: text("company"),
     position: text("position"),
+    // Outreach segment (AI-classified once, cached): drives DM tone + credibility.
+    segmentVertical: text("segment_vertical"), // cybersecurity | agency | saas | ai_ml | hr_tech | legal_finance | general_b2b
+    segmentTier: text("segment_tier"), // ATL | BTL
     enrichment: jsonb("enrichment").$type<ConnectionEnrichment | null>(),
     // Lowercased searchable blob (headline + position + company + latest job
     // description + About) used for enriched ICP keyword matching.

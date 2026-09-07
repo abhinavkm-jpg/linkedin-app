@@ -469,6 +469,17 @@ export async function setAccountReplyStrategy(accountId: string, text: string): 
   revalidatePath(`/accounts/${accountId}`);
 }
 
+/** Update the account's differentiators / credibility bank. Admin only. */
+export async function setAccountDifferentiators(accountId: string, text: string): Promise<void> {
+  await requireAdmin();
+  await db
+    .update(linkedinAccounts)
+    .set({ differentiators: text.trim() || null })
+    .where(eq(linkedinAccounts.id, accountId));
+  revalidatePath("/accounts");
+  revalidatePath(`/accounts/${accountId}`);
+}
+
 /** Update (or create) the workspace default DM system prompt. Admin only. */
 export async function updateDefaultPrompt(text: string): Promise<void> {
   const user = await requireAdmin();

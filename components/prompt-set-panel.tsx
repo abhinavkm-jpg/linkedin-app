@@ -12,6 +12,7 @@ import {
   saveAccountPromptSet,
   setAccountDefaultPrompt,
   setAccountReplyStrategy,
+  setAccountDifferentiators,
 } from "@/app/(dashboard)/accounts/actions";
 import { previewAiMessage } from "@/app/(dashboard)/templates/actions";
 import { ConnectionPicker, type PickedConnection } from "@/components/connection-picker";
@@ -40,12 +41,14 @@ export function PromptSetPanel({
   accountName,
   defaultPrompt,
   replyStrategy,
+  differentiators: differentiatorsProp,
   initial,
 }: {
   accountId: string;
   accountName: string;
   defaultPrompt: string;
   replyStrategy: string;
+  differentiators: string;
   initial: { stage: string; promptText: string | null; shareContent: boolean }[];
 }) {
   const router = useRouter();
@@ -57,6 +60,10 @@ export function PromptSetPanel({
   // Reply/pipeline sales strategy (offer + qualification) — reply drafts only.
   const [strategy, setStrategy] = useState(replyStrategy);
   const [savingStrategy, setSavingStrategy] = useState(false);
+
+  // Differentiators / credibility bank — used for the DM3 credibility line + replies.
+  const [differentiators, setDifferentiators] = useState(differentiatorsProp);
+  const [savingDiff, setSavingDiff] = useState(false);
 
   // Per-stage TASK — only what that message does. Seeded from short starters.
   const [entries, setEntries] = useState<Record<string, Entry>>(() => {
@@ -99,6 +106,17 @@ export function PromptSetPanel({
       })
       .catch((e) => toast.error(e instanceof Error ? e.message : "Save failed"))
       .finally(() => setSavingStrategy(false));
+  }
+
+  function saveDifferentiators() {
+    setSavingDiff(true);
+    setAccountDifferentiators(accountId, differentiators)
+      .then(() => {
+        toast.success("Differentiators saved");
+        router.refresh();
+      })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Save failed"))
+      .finally(() => setSavingDiff(false));
   }
 
   function persist(stages: { stage: string; promptText: string | null; shareContent: boolean }[]) {
@@ -229,6 +247,41 @@ export function PromptSetPanel({
             <Button size="sm" onClick={saveStrategy} disabled={savingStrategy}>
               {savingStrategy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Save reply strategy
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Differentiators — credibility bank for the DM3 line + reply drafts */}
+      <Card className="border-primary/30">
+        <CardHeader className="flex-row items-center gap-2 space-y-0 pb-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Target className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <CardTitle className="text-base">Differentiators</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Company proof points / credibility bank. The content-share message (DM3) weaves in
+              <span className="font-medium"> one</span> matched line from here, and reply drafts may
+              use one when proposing a call. One line, never a dump.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea
+            value={differentiators}
+            onChange={(e) => setDifferentiators(e.target.value)}
+            rows={10}
+            className="font-mono text-xs leading-relaxed"
+            placeholder="One differentiator per line (owned media, scale, retention, verticals, buying-committee reach…)"
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              {differentiators.length.toLocaleString()} characters
+            </span>
+            <Button size="sm" onClick={saveDifferentiators} disabled={savingDiff}>
+              {savingDiff ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save differentiators
             </Button>
           </div>
         </CardContent>

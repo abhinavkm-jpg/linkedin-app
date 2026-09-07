@@ -90,12 +90,14 @@ export async function refreshPipelineForReply(opts: {
 
   const voice = account.defaultPrompt?.trim() || (await getDefaultSystemPrompt());
   const strategy = account.replyStrategy?.trim() || undefined;
+  const differentiators = account.differentiators?.trim() || undefined;
   const draft = await draftPipelineReply({
     prospect,
     priorMessages,
     currentStage,
     voice,
     strategy,
+    differentiators,
     latestInbound: latestInbound ?? undefined,
   });
 

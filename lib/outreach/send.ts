@@ -20,7 +20,7 @@ import {
 import { canSend, canEnrichNow, incrementCounter } from "@/lib/rate-limit";
 import { sendInvitation, startChat, sendMessage, getProfile, listMessages, UnipileError } from "@/lib/unipile/client";
 import { renderTemplate, templateVarsFromConnection } from "@/lib/templates";
-import { generateMessage, type OutreachStep, type ProspectContext } from "@/lib/ai/generate";
+import { generateMessage, classifySegment, type OutreachStep, type ProspectContext } from "@/lib/ai/generate";
 import { STAGE_SHARE_DEFAULTS } from "@/lib/ai/prompts";
 import { connectionMatchesIcp, hasIcp } from "@/lib/icp";
 import { enrichConnectionRow } from "@/lib/outreach/enrich";
@@ -376,27 +376,52 @@ export async function resolveStepText(
       .where(and(eq(accountPromptSets.accountId, camp.accountId), eq(accountPromptSets.stage, stage)))
       .limit(1);
 
-    // Layered model: VOICE (identity/rules) + a per-stage TASK (what this
-    // message does). An explicit per-step prompt overrides the voice; otherwise
-    // the voice is the account's own default (falling back to the workspace
-    // default inside generateMessage when undefined).
+    // Load the account once: voice (fallback), differentiators, and owner name.
+    const [acct] = await db
+      .select({
+        defaultPrompt: linkedinAccounts.defaultPrompt,
+        differentiators: linkedinAccounts.differentiators,
+        name: linkedinAccounts.name,
+      })
+      .from(linkedinAccounts)
+      .where(eq(linkedinAccounts.id, camp.accountId))
+      .limit(1);
+
+    // Layered model: VOICE (identity/rules) + a per-stage TASK (what this message
+    // does). An explicit per-step prompt overrides the voice; otherwise the voice
+    // is the account's own default (falling back to the workspace default inside
+    // generateMessage when undefined).
     let systemPrompt: string | undefined;
     if (step.aiPromptId) {
       const [p] = await db.select().from(aiPrompts).where(eq(aiPrompts.id, step.aiPromptId)).limit(1);
       systemPrompt = p?.systemPrompt;
       model = model ?? p?.model ?? undefined;
-    } else {
-      const [acct] = await db
-        .select({ defaultPrompt: linkedinAccounts.defaultPrompt })
-        .from(linkedinAccounts)
-        .where(eq(linkedinAccounts.id, camp.accountId))
-        .limit(1);
-      if (acct?.defaultPrompt?.trim()) systemPrompt = acct.defaultPrompt;
+    } else if (acct?.defaultPrompt?.trim()) {
+      systemPrompt = acct.defaultPrompt;
     }
 
     // The stage's job (short, editable). Falls back to the built-in per-stage
     // instruction inside generateMessage when this account hasn't set one.
     const taskInstruction = setRow?.promptText?.trim() || undefined;
+
+    // Outreach segment (vertical + seniority): classified once, then cached on the
+    // connection and reused by every DM (tone for DM1, credibility match for DM3).
+    let segmentVertical = conn.segmentVertical;
+    let segmentTier = conn.segmentTier;
+    if (!segmentVertical) {
+      const seg = await classifySegment({
+        headline: conn.headline,
+        position: conn.position,
+        company: conn.company,
+        summary: conn.enrichment?.summary ?? null,
+      });
+      segmentVertical = seg.vertical;
+      segmentTier = seg.tier;
+      await db
+        .update(connections)
+        .set({ segmentVertical, segmentTier })
+        .where(eq(connections.id, conn.id));
+    }
 
     const prospect: ProspectContext = {
       firstName: conn.firstName,
@@ -407,17 +432,26 @@ export async function resolveStepText(
       locationCountry: conn.locationCountry,
       summary: conn.enrichment?.summary ?? null,
       experience: conn.enrichment?.workExperience ?? [],
+      segmentVertical,
+      segmentTier,
     };
 
-    // Content-sharing stage → hand the model real article options to reference.
-    // An explicit saved row wins; otherwise fall back to the stage default so the
-    // effective behavior matches what the per-stage editor shows (follow-up 2 & 3
+    // Content-sharing stage (DM3) → real article options to reference, and let the
+    // model add ONE matched credibility line from the differentiators. An explicit
+    // saved row wins; otherwise fall back to the stage default (follow-up 2 & 3
     // share by default until turned off).
     const shouldShare = setRow ? setRow.shareContent : (STAGE_SHARE_DEFAULTS[stage] ?? false);
     let instructions: string | undefined;
     if (shouldShare) {
       const assets = await pickRelevantAssets(camp.accountId, prospect, 5);
       if (assets.length > 0) instructions = contentInstruction(assets);
+    }
+    // DM4 (breakup + soft meeting ask) signs off with the account owner's first name.
+    if (stage === "follow_up_3" && acct?.name?.trim()) {
+      const firstName = acct.name.trim().split(/\s+/)[0];
+      instructions = [instructions, `Sign off with just the first name "${firstName}".`]
+        .filter(Boolean)
+        .join(" ");
     }
 
     // Feed the real thread so follow-ups build on what was already said, never
@@ -431,6 +465,7 @@ export async function resolveStepText(
       taskInstruction,
       model,
       instructions,
+      credibilityBank: shouldShare ? acct?.differentiators ?? undefined : undefined,
       priorMessages,
     });
     return res.text;

@@ -37,7 +37,7 @@ export const STAGE_STARTER_PROMPTS: Record<string, string> = {
   follow_up_2:
     "Go one level deeper: seek to understand their current process, priorities, or challenge. Do not present solutions yet. When article options are provided, share the single most relevant one using its exact URL. 50-120 words.",
   follow_up_3:
-    "The final, polite close (breakup). Acknowledge the timing may not be right and offer to reconnect later. Keep it low-pressure with no guilt. You may tie their challenge to a pattern or add light credibility. When article options are provided, share the single most relevant one using its exact URL. 50-120 words.",
+    "Closing message that doubles as a soft meeting ask. Briefly reference the sequence for context, then make ONE low-friction ask: a short 20-minute call to compare notes on what they're seeing in demand gen. No hard CTA, no calendar link, no pressure, no 'good luck', no apology. Keep it UNDER 300 characters. End with just your first name.",
 };
 
 /**
