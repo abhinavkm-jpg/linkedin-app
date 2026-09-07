@@ -31,11 +31,11 @@ export const STAGE_STARTER_PROMPTS: Record<string, string> = {
   connection_request:
     "Write the invitation note sent before connecting. Max 300 characters. Give one specific, genuine reason to connect based on their role, company, or industry. Do not pitch, mention services, or ask for a meeting.",
   welcome:
-    "They just accepted the invite. Send a short, warm thank-you with one relevant observation about their role, company, or market. No pitch, no ask, no link. 50-120 words.",
+    "They just accepted the invite. Send a short, warm thank-you with one relevant observation about their role, company, or market. No pitch, no ask, no link. 60-90 words.",
   follow_up_1:
-    "Share ONE sharp insight relevant to their industry or role, then ask a single thoughtful, open-ended question. Still no pitch. 50-120 words.",
+    "Share ONE sharp insight relevant to their industry or role, then ask a single thoughtful, open-ended question. Still no pitch. 60-90 words.",
   follow_up_2:
-    "Go one level deeper: seek to understand their current process, priorities, or challenge. Do not present solutions yet. When article options are provided, share the single most relevant one using its exact URL. 50-120 words.",
+    "Go one level deeper: seek to understand their current process, priorities, or challenge. Do not present solutions yet. When article options are provided, share the single most relevant one using its exact URL. 60-90 words.",
   follow_up_3:
     "Closing message that doubles as a soft meeting ask. Briefly reference the sequence for context, then make ONE low-friction ask: a short 20-minute call to compare notes on what they're seeing in demand gen. No hard CTA, no calendar link, no pressure, no 'good luck', no apology. Keep it UNDER 300 characters. End with just your first name.",
 };

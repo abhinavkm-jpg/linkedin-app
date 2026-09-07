@@ -59,11 +59,11 @@ const STEP_INSTRUCTIONS: Record<OutreachStep, string> = {
   connection_request:
     "Write a LinkedIn connection request note. Max 300 characters. Personalize the reason for connecting. Do not pitch, mention services, or ask for a meeting.",
   welcome:
-    "They just accepted the connection. Thank them briefly, reference something relevant to their role or business, and end naturally. No sales pitch. 50-120 words.",
+    "They just accepted the connection. Thank them briefly, reference something relevant to their role or business, and end naturally. No sales pitch. 60-90 words.",
   follow_up_1:
-    "Share one observation about their industry, role, or market and relate it to a business challenge. Ask one thoughtful, open-ended question. 50-120 words.",
+    "Share one observation about their industry, role, or market and relate it to a business challenge. Ask one thoughtful, open-ended question. 60-90 words.",
   follow_up_2:
-    "Continue the conversation. Seek to understand their current process, priorities, or challenges. Do not present solutions yet. 50-120 words.",
+    "Continue the conversation. Seek to understand their current process, priorities, or challenges. Do not present solutions yet. 60-90 words.",
   follow_up_3:
     "Closing message that doubles as a soft meeting ask. Briefly reference the sequence so they have context, then make ONE low-friction ask: a short 20-minute call to compare notes on what they're seeing in demand gen. No hard CTA, no calendar link, no pressure. Do NOT write them off: no 'good luck', no apology, no 'sorry to bother you'. Keep it UNDER 300 characters. End with just your first name on its own line.",
 };
@@ -185,6 +185,17 @@ export async function generateMessage(opts: GenerateOptions): Promise<GeneratedM
   }
   if (opts.instructions) {
     parts.push("", `Additional guidance: ${opts.instructions}`);
+  }
+  // Hard length ceiling for the conversational DMs — enforced here so it holds
+  // regardless of the (possibly older) per-stage task text. Models drift on soft
+  // word counts, so state it as a firm limit.
+  const LENGTH_CAP: Partial<Record<OutreachStep, string>> = {
+    welcome: "HARD LIMIT: 60-90 words, and NEVER more than 90. Keep it tight — ideally one short paragraph.",
+    follow_up_1: "HARD LIMIT: 60-90 words, and NEVER more than 90. One insight plus one question, no padding.",
+    follow_up_2: "HARD LIMIT: 60-90 words, and NEVER more than 90. Stay tight even with an article to share.",
+  };
+  if (LENGTH_CAP[opts.step]) {
+    parts.push("", LENGTH_CAP[opts.step]!);
   }
   // Closing step signs off with "Thanks," + the account owner's real first name.
   if (opts.step === "follow_up_3" && opts.signOffName?.trim()) {
