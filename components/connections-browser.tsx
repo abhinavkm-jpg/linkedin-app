@@ -19,8 +19,69 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { relationshipStatusLabel } from "@/lib/status";
-import { enrollConnections, enrichConnections } from "@/app/(dashboard)/connections/actions";
+import {
+  enrollConnections,
+  enrichConnections,
+  setConnectionSegment,
+} from "@/app/(dashboard)/connections/actions";
 import type { Connection, LinkedinAccount } from "@/db/schema";
+
+const SEGMENT_VERTICAL_OPTIONS = [
+  { value: "cybersecurity", label: "Cybersecurity" },
+  { value: "agency", label: "Agency" },
+  { value: "saas", label: "SaaS" },
+  { value: "ai_ml", label: "AI / ML" },
+  { value: "hr_tech", label: "HR / LMS" },
+  { value: "legal_finance", label: "Legal / Finance" },
+  { value: "general_b2b", label: "General B2B" },
+];
+
+function SegmentCell({ c }: { c: Connection }) {
+  const [pending, start] = useTransition();
+  const [vertical, setVertical] = useState(c.segmentVertical ?? "");
+  const [tier, setTier] = useState(c.segmentTier ?? "");
+
+  function save(v: string, t: string) {
+    setVertical(v);
+    setTier(t);
+    start(async () => {
+      try {
+        await setConnectionSegment(c.id, v || null, t || null);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to set segment");
+      }
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        className="h-7 max-w-[7.5rem] rounded-md border border-input bg-transparent px-1 text-xs"
+        value={vertical}
+        onChange={(e) => save(e.target.value, tier)}
+        disabled={pending}
+      >
+        <option value="">—</option>
+        {SEGMENT_VERTICAL_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <select
+        className="h-7 rounded-md border border-input bg-transparent px-1 text-xs"
+        value={tier}
+        onChange={(e) => save(vertical, e.target.value)}
+        disabled={pending}
+      >
+        <option value="">—</option>
+        <option value="ATL">ATL</option>
+        <option value="BTL">BTL</option>
+      </select>
+      {pending && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+    </div>
+  );
+}
 
 const STATUSES = [
   "connection",
@@ -47,11 +108,12 @@ const COLUMNS = [
   { key: "company", label: "Company" },
   { key: "country", label: "Country" },
   { key: "tags", label: "Tags" },
+  { key: "segment", label: "Segment" },
   { key: "connected", label: "Connected" },
   { key: "account", label: "Account" },
 ] as const;
 type ColKey = (typeof COLUMNS)[number]["key"];
-const DEFAULT_COLS: ColKey[] = ["headline", "company", "country"];
+const DEFAULT_COLS: ColKey[] = ["headline", "company", "country", "segment"];
 
 export function ConnectionsBrowser({
   rows,
@@ -305,6 +367,7 @@ export function ConnectionsBrowser({
               {cols.has("company") && <TableHead>Company</TableHead>}
               {cols.has("country") && <TableHead>Country</TableHead>}
               {cols.has("tags") && <TableHead>Tags</TableHead>}
+              {cols.has("segment") && <TableHead>Segment</TableHead>}
               {cols.has("connected") && <TableHead>Connected</TableHead>}
               {cols.has("account") && <TableHead>Account</TableHead>}
               <TableHead>Status</TableHead>
@@ -353,6 +416,11 @@ export function ConnectionsBrowser({
                   {cols.has("tags") && (
                     <TableCell className="max-w-40 truncate text-muted-foreground">
                       {c.tags && c.tags.length > 0 ? c.tags.join(", ") : "—"}
+                    </TableCell>
+                  )}
+                  {cols.has("segment") && (
+                    <TableCell>
+                      <SegmentCell c={c} />
                     </TableCell>
                   )}
                   {cols.has("connected") && (

@@ -52,3 +52,17 @@ export async function tagConnections(connectionIds: string[], tags: string[]): P
     .where(inArray(connections.id, connectionIds));
   revalidatePath("/connections");
 }
+
+/** Manually set (override) a connection's outreach segment. */
+export async function setConnectionSegment(
+  connectionId: string,
+  vertical: string | null,
+  tier: string | null,
+): Promise<void> {
+  await requireUser();
+  await db
+    .update(connections)
+    .set({ segmentVertical: vertical || null, segmentTier: tier || null })
+    .where(eq(connections.id, connectionId));
+  revalidatePath("/connections");
+}
