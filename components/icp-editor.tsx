@@ -139,10 +139,15 @@ export function IcpEditor({
     ...new Set((targeting.countries ?? []).map((c) => toCode(c)).filter((x): x is string => !!x)),
   ]);
   const [tags, setTags] = useState<string[]>(targeting.tags ?? []);
+  const [excludeCompanies, setExcludeCompanies] = useState<string[]>(
+    targeting.excludeCompanies ?? [],
+  );
 
   function save() {
     start(async () => {
-      await updateCampaign(campaignId, { targeting: { titleKeywords, countries, tags } });
+      await updateCampaign(campaignId, {
+        targeting: { titleKeywords, countries, tags, excludeCompanies },
+      });
       toast.success("ICP saved");
       router.refresh();
     });
@@ -183,6 +188,19 @@ export function IcpEditor({
         <div className="space-y-1.5">
           <Label>Tags (optional)</Label>
           <ChipMultiSelect value={tags} onChange={setTags} placeholder="Add a tag…" />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Exclude companies (optional)</Label>
+          <ChipMultiSelect
+            value={excludeCompanies}
+            onChange={setExcludeCompanies}
+            placeholder="Add a company to exclude and press Enter…"
+          />
+          <p className="text-xs text-muted-foreground">
+            Anyone whose company matches one of these is never enrolled or messaged (matches a
+            partial name, e.g. &ldquo;Machintel&rdquo; also excludes &ldquo;Machintel Inc&rdquo;).
+          </p>
         </div>
 
         <div className="flex items-center gap-3">

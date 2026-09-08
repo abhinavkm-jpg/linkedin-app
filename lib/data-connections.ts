@@ -7,6 +7,7 @@ import {
   desc,
   eq,
   ne,
+  not,
   ilike,
   inArray,
   isNull,
@@ -172,6 +173,19 @@ export async function getIcpMatches(
 
   const tags = (targeting.tags ?? []).filter(Boolean);
   if (tags.length > 0) clauses.push(arrayOverlaps(connections.tags, tags));
+
+  // Company exclusion: drop anyone whose company (or enriched blob) matches an
+  // excluded name. Applies whether or not any inclusion criteria are set.
+  const excludeCompanies = (targeting.excludeCompanies ?? []).map((c) => c.trim()).filter(Boolean);
+  if (excludeCompanies.length > 0) {
+    const hit = or(
+      ...excludeCompanies.flatMap((c) => [
+        ilike(connections.company, `%${c}%`),
+        ilike(connections.enrichedText, `%${c}%`),
+      ]),
+    );
+    if (hit) clauses.push(not(hit));
+  }
 
   // Per-campaign dedup: only when the campaign wants unique contacts.
   if (opts.excludeCampaignId && opts.dedupe !== false) {

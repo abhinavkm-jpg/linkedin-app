@@ -332,6 +332,8 @@ export type CampaignTargeting = {
   countries?: string[];
   tags?: string[];
   relationshipStatuses?: string[];
+  /** Companies to exclude — anyone whose company matches (contains) any of these is never enrolled/messaged. */
+  excludeCompanies?: string[];
 };
 
 export const campaigns = pgTable("campaigns", {

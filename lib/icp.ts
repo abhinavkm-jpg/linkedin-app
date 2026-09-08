@@ -26,13 +26,23 @@ export function pickLatestJob(
 export function connectionMatchesIcp(
   conn: Pick<
     Connection,
-    "headline" | "position" | "locationCountry" | "locationCountryCode" | "tags" | "enrichedText"
+    "headline" | "position" | "company" | "locationCountry" | "locationCountryCode" | "tags" | "enrichedText"
   >,
   targeting: CampaignTargeting,
 ): boolean {
   const keywords = (targeting.titleKeywords ?? []).map((k) => k.trim().toLowerCase()).filter(Boolean);
   const countries = (targeting.countries ?? []).filter(Boolean);
   const tags = (targeting.tags ?? []).filter(Boolean);
+  const excludeCompanies = (targeting.excludeCompanies ?? [])
+    .map((c) => c.trim().toLowerCase())
+    .filter(Boolean);
+
+  // Exclusion always applies (even with no inclusion criteria): drop anyone whose
+  // company matches an excluded name.
+  if (excludeCompanies.length > 0) {
+    const hay = `${conn.company ?? ""} ${conn.enrichedText ?? ""}`.toLowerCase();
+    if (excludeCompanies.some((c) => hay.includes(c))) return false;
+  }
 
   if (keywords.length === 0 && countries.length === 0 && tags.length === 0) return true;
 
@@ -66,7 +76,8 @@ export function hasIcp(targeting: CampaignTargeting): boolean {
   return (
     (targeting.titleKeywords?.length ?? 0) +
       (targeting.countries?.length ?? 0) +
-      (targeting.tags?.length ?? 0) >
+      (targeting.tags?.length ?? 0) +
+      (targeting.excludeCompanies?.length ?? 0) >
     0
   );
 }
