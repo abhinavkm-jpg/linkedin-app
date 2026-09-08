@@ -537,7 +537,7 @@ export async function draftPipelineReply(opts: {
       ...(opts.differentiators?.trim()
         ? [
             "",
-            `MACHINTEL DIFFERENTIATORS (use AT MOST ONE, only when it strengthens the point or when proposing a call; match it to the prospect; never dump the list):\n${opts.differentiators.trim()}`,
+            `MACHINTEL DIFFERENTIATORS: when you propose a call, weave in ONE of these, matched to their segment/situation, as the concrete reason it's worth their time (one only, phrased naturally in the voice, never a list). While still qualifying you may use one only if it genuinely strengthens a point. D7 (Centers of Excellence) is fine on a call proposal but never as a list.\n${opts.differentiators.trim()}`,
           ]
         : []),
       "",
