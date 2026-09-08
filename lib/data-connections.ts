@@ -7,7 +7,6 @@ import {
   desc,
   eq,
   ne,
-  not,
   ilike,
   inArray,
   isNull,
@@ -175,16 +174,14 @@ export async function getIcpMatches(
   if (tags.length > 0) clauses.push(arrayOverlaps(connections.tags, tags));
 
   // Company exclusion: drop anyone whose company (or enriched blob) matches an
-  // excluded name. Applies whether or not any inclusion criteria are set.
+  // excluded name. COALESCE to '' so NULL company/enrichedText (un-enriched rows)
+  // don't get filtered out by NULL propagation — only real matches are excluded.
   const excludeCompanies = (targeting.excludeCompanies ?? []).map((c) => c.trim()).filter(Boolean);
-  if (excludeCompanies.length > 0) {
-    const hit = or(
-      ...excludeCompanies.flatMap((c) => [
-        ilike(connections.company, `%${c}%`),
-        ilike(connections.enrichedText, `%${c}%`),
-      ]),
+  for (const c of excludeCompanies) {
+    const pat = `%${c}%`;
+    clauses.push(
+      sql`coalesce(${connections.company}, '') not ilike ${pat} and coalesce(${connections.enrichedText}, '') not ilike ${pat}`,
     );
-    if (hit) clauses.push(not(hit));
   }
 
   // Per-campaign dedup: only when the campaign wants unique contacts.
