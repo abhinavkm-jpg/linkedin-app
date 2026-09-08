@@ -165,6 +165,7 @@ const CONTENT_STAGES = [
   "follow_up_1",
   "follow_up_2",
   "follow_up_3",
+  "follow_up_4",
 ] as const;
 
 /** Title-case the last slug of a URL path, e.g. /blog/next-gen-lead-gen/ → "Next Gen Lead Gen". */

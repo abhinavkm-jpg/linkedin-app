@@ -38,7 +38,7 @@ export type RecipientActivity = {
   createdAt: string;
 };
 
-const MESSAGE_TOUCHES = ["Welcome", "Follow-up 1", "Follow-up 2", "Follow-up 3"];
+const MESSAGE_TOUCHES = ["Welcome", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Follow-up 4"];
 
 /** Label an activity by its touch, mirroring the send-time stage mapping. */
 function labelTimeline(acts: RecipientActivity[]): (RecipientActivity & { touch: string })[] {

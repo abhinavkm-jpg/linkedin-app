@@ -457,8 +457,12 @@ export async function resolveStepText(
       taskInstruction,
       model,
       instructions,
-      credibilityBank: shouldShare ? acct?.differentiators ?? undefined : undefined,
-      // DM4 signs off with the account owner's real first name — never invented.
+      // Differentiators are used in DM2-DM5 (one per message, rotated) — never in
+      // the welcome (DM1) or the invite.
+      credibilityBank: ["follow_up_1", "follow_up_2", "follow_up_3", "follow_up_4"].includes(stage)
+        ? acct?.differentiators ?? undefined
+        : undefined,
+      // Every message signs off with the account owner's real first name.
       signOffName: acct?.name?.trim().split(/\s+/)[0],
       priorMessages,
     });
@@ -501,7 +505,8 @@ function aiStepLabel(step: SequenceStep, steps: SequenceStep[]): OutreachStep {
   if (step.type === "invite") return "connection_request";
   const messageSteps = steps.filter((s) => s.type === "message");
   const idx = messageSteps.findIndex((s) => s.id === step.id);
-  return (["welcome", "follow_up_1", "follow_up_2", "follow_up_3"][idx] ?? "follow_up_3") as OutreachStep;
+  return (["welcome", "follow_up_1", "follow_up_2", "follow_up_3", "follow_up_4"][idx] ??
+    "follow_up_4") as OutreachStep;
 }
 
 async function ensureProviderId(conn: Connection, account: LinkedinAccount): Promise<string | null> {

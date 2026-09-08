@@ -66,8 +66,13 @@ const PREVIEW_STEPS: { value: string; label: string; description: string }[] = [
   },
   {
     value: "follow_up_3",
-    label: "Follow-up 3",
-    description: "Tie their challenge to a pattern you've seen; light credibility; focus on their outcome.",
+    label: "Follow-up 3 (DM4 · vendor question)",
+    description: "Direct question about their current vendor/program/gap + one differentiator.",
+  },
+  {
+    value: "follow_up_4",
+    label: "Follow-up 4 (DM5 · meeting ask)",
+    description: "Final differentiator + a soft 20-minute meeting ask.",
   },
 ];
 
@@ -628,7 +633,7 @@ function PromptDialog({
 
   function changeStage(v: string) {
     setStep(v);
-    setShareContent(v === "follow_up_2" || v === "follow_up_3");
+    setShareContent(v === "follow_up_2");
   }
 
   function submit() {
@@ -664,7 +669,7 @@ function PromptDialog({
     previewAiMessage({
       systemPrompt,
       model,
-      step: step as "connection_request" | "welcome" | "follow_up_1" | "follow_up_2" | "follow_up_3",
+      step: step as "connection_request" | "welcome" | "follow_up_1" | "follow_up_2" | "follow_up_3" | "follow_up_4",
       connectionId: picked?.id,
       accountId: shareContent ? accountId || undefined : undefined,
       shareContent: shareContent && !!accountId,

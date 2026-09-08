@@ -78,6 +78,8 @@ export async function refreshPipelineForReply(opts: {
     locationCountry: profile.locationCountry,
     summary: profile.enrichment?.summary ?? null,
     experience: profile.enrichment?.workExperience ?? [],
+    segmentVertical: profile.segmentVertical,
+    segmentTier: profile.segmentTier,
   };
 
   // Their newest inbound: the passed reply, else the last "them" line in history.

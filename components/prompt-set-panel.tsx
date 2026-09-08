@@ -21,10 +21,11 @@ import type { OutreachStep } from "@/lib/ai/generate";
 
 const STAGES: { stage: OutreachStep; label: string; hint: string; content: boolean }[] = [
   { stage: "connection_request", label: "Connection request", hint: "The invite note when first connecting.", content: false },
-  { stage: "welcome", label: "Welcome", hint: "First message right after they accept.", content: false },
-  { stage: "follow_up_1", label: "Follow-up 1", hint: "One insight + a single open question.", content: false },
-  { stage: "follow_up_2", label: "Follow-up 2", hint: "Go deeper. Shares an article by default.", content: true },
-  { stage: "follow_up_3", label: "Follow-up 3", hint: "Polite breakup. Shares an article.", content: true },
+  { stage: "welcome", label: "DM1 · Welcome", hint: "Warm 2-sentence opener. No differentiator.", content: false },
+  { stage: "follow_up_1", label: "DM2 · Observation", hint: "Observation + 1 differentiator + pain question.", content: false },
+  { stage: "follow_up_2", label: "DM3 · Blog + proof", hint: "Article + insight + a 2nd differentiator.", content: true },
+  { stage: "follow_up_3", label: "DM4 · Vendor question", hint: "Vendor/program question + 3rd differentiator.", content: false },
+  { stage: "follow_up_4", label: "DM5 · Meeting ask", hint: "Final differentiator + soft 20-min ask.", content: false },
 ];
 
 type Entry = { promptText: string; shareContent: boolean };

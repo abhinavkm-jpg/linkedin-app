@@ -40,7 +40,8 @@ export type OutreachStep =
   | "welcome"
   | "follow_up_1"
   | "follow_up_2"
-  | "follow_up_3";
+  | "follow_up_3"
+  | "follow_up_4";
 
 export interface ProspectContext {
   firstName?: string | null;
@@ -58,14 +59,21 @@ export interface ProspectContext {
 const STEP_INSTRUCTIONS: Record<OutreachStep, string> = {
   connection_request:
     "Write a LinkedIn connection request note. Max 300 characters. Personalize the reason for connecting. Do not pitch, mention services, or ask for a meeting.",
+  // DM1
   welcome:
-    "They just accepted the connection. Thank them briefly, reference something relevant to their role or business, and end naturally. No sales pitch. 60-90 words.",
+    "They just accepted the connection. Write a warm, human two-sentence opener that nods to their space/segment. No pitch, no mention of services or credentials, no differentiator, and no ask.",
+  // DM2 — personalized observation + first differentiator + pain question
   follow_up_1:
-    "Share one observation about their industry, role, or market and relate it to a business challenge. Ask one thoughtful, open-ended question. 60-90 words.",
+    "Open with a research-backed observation about their role, company, or segment. Then weave in EXACTLY ONE differentiator as a natural credential (it explains why you'd notice this), placed after the observation and before the question. End with ONE question that surfaces a pain they'd recognize. No hard pitch.",
+  // DM3 — blog insight + second differentiator
   follow_up_2:
-    "Continue the conversation. Seek to understand their current process, priorities, or challenges. Do not present solutions yet. 60-90 words.",
+    "Share the single most relevant article provided (use its EXACT url) with a one-line, plain-language insight tied to their likely pain. Then add EXACTLY ONE differentiator as a credibility line, different from any used earlier in this thread. No CTA harder than 'thought this was relevant.'",
+  // DM4 — vendor question + third differentiator (opens active selling)
   follow_up_3:
-    "Closing message that doubles as a soft meeting ask. Briefly reference the sequence so they have context, then make ONE low-friction ask: a short 20-minute call to compare notes on what they're seeing in demand gen. No hard CTA, no calendar link, no pressure. Do NOT write them off: no 'good luck', no apology, no 'sorry to bother you'. Keep it UNDER 300 characters. End with just your first name on its own line.",
+    "Open the sales conversation. Ask ONE direct question about their current demand-gen vendor, program, or the biggest gap in it (frame it around performance or a gap, not the vendor personally). Then add EXACTLY ONE differentiator that positions Machintel as the alternative, different from any used earlier in this thread. Close with 'Worth a conversation if the timing is right.' No hard CTA, no calendar link.",
+  // DM5 — meeting ask + final differentiator
+  follow_up_4:
+    "The close. Add EXACTLY ONE final differentiator matched to their segment, different from any used earlier in this thread, then make ONE soft, low-friction ask for a 20-minute call. No calendar link, no pressure, no apology, no 'good luck'.",
 };
 
 function buildProspectBlock(p: ProspectContext): string {
@@ -179,29 +187,31 @@ export async function generateMessage(opts: GenerateOptions): Promise<GeneratedM
   if (opts.credibilityBank?.trim()) {
     parts.push(
       "",
-      "MACHINTEL DIFFERENTIATORS (context for a credibility line — use AT MOST ONE, only the one that fits this prospect's situation/vertical; phrase it in the voice, never dump the list):",
+      "MACHINTEL DIFFERENTIATORS — weave in EXACTLY ONE, the single one that best fits this prospect's segment/situation, phrased naturally in the voice (never a list, never a hard pitch). Do NOT reuse any differentiator already used earlier in this thread (see the conversation above — pick a different one each message). Reserve D7 (Centers of Excellence) for calls/proposals; do NOT use it in these DMs.",
       opts.credibilityBank.trim(),
     );
   }
   if (opts.instructions) {
     parts.push("", `Additional guidance: ${opts.instructions}`);
   }
-  // Hard length ceiling for the conversational DMs — enforced here so it holds
-  // regardless of the (possibly older) per-stage task text. Models drift on soft
-  // word counts, so state it as a firm limit.
+  // Hard length ceiling per stage — enforced here so it holds regardless of the
+  // (possibly older) saved per-stage task text. Models drift on soft word counts,
+  // so state it as a firm limit. Caps mirror the v2.0 example lengths.
   const LENGTH_CAP: Partial<Record<OutreachStep, string>> = {
-    welcome: "HARD LIMIT: 60-90 words, and NEVER more than 90. Keep it tight — ideally one short paragraph.",
-    follow_up_1: "HARD LIMIT: 60-90 words, and NEVER more than 90. One insight plus one question, no padding.",
-    follow_up_2: "HARD LIMIT: 60-90 words, and NEVER more than 90. Stay tight even with an article to share.",
+    welcome: "HARD LIMIT: 15-35 words, two sentences max. No differentiator.",
+    follow_up_1: "HARD LIMIT: 45-65 words. One observation, one differentiator, one question.",
+    follow_up_2: "HARD LIMIT: 35-55 words (the article URL does not count). One insight, one differentiator, the link.",
+    follow_up_3: "HARD LIMIT: 40-60 words. One vendor/program question, one differentiator, the soft close line.",
+    follow_up_4: "HARD LIMIT: 40-55 words. One differentiator, then a soft 20-minute meeting ask.",
   };
   if (LENGTH_CAP[opts.step]) {
     parts.push("", LENGTH_CAP[opts.step]!);
   }
-  // Closing step signs off with "Thanks," + the account owner's real first name.
-  if (opts.step === "follow_up_3" && opts.signOffName?.trim()) {
+  // Every message signs off with the account owner's real first name (v2.0 rule).
+  if (opts.signOffName?.trim()) {
     parts.push(
       "",
-      `End the message with a sign-off of exactly "Thanks," on one line and "${opts.signOffName.trim()}" on the next line. Do NOT use any other name, company name, or closing.`,
+      `End the message signed off with just the first name "${opts.signOffName.trim()}" (e.g. it ends "${opts.signOffName.trim()}."). Do NOT invent any other name, add a company name, or use any other closing.`,
     );
   }
   parts.push(
