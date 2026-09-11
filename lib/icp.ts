@@ -47,11 +47,10 @@ export function connectionMatchesIcp(
   if (keywords.length === 0 && countries.length === 0 && tags.length === 0) return true;
 
   if (keywords.length > 0) {
-    // Prefer the enriched search blob (title + description + company + About);
-    // fall back to headline + position for connections not yet enriched.
-    const haystack = (
-      conn.enrichedText ?? `${conn.headline ?? ""} ${conn.position ?? ""}`
-    ).toLowerCase();
+    // Title keywords match the ROLE (headline + position) only, not the whole
+    // enriched blob — so an incidental keyword in someone's About/history doesn't
+    // qualify an off-function person.
+    const haystack = `${conn.headline ?? ""} ${conn.position ?? ""}`.toLowerCase();
     if (!keywords.some((kw) => haystack.includes(kw))) return false;
   }
 

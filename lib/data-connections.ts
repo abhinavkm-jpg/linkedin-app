@@ -137,11 +137,12 @@ export async function getIcpMatches(
 
   const keywords = (targeting.titleKeywords ?? []).map((k) => k.trim()).filter(Boolean);
   if (keywords.length > 0) {
-    // Match against the enriched search blob (title + job description + company
-    // + About), OR the headline for connections not yet enriched.
+    // Title keywords match the ROLE (position + headline) — not the whole enriched
+    // blob (About/company/history) — so a keyword mentioned incidentally in someone's
+    // About doesn't pull in an off-function person.
     const kwClause = or(
       ...keywords.flatMap((kw) => [
-        ilike(connections.enrichedText, `%${kw}%`),
+        ilike(connections.position, `%${kw}%`),
         ilike(connections.headline, `%${kw}%`),
       ]),
     );
