@@ -47,7 +47,7 @@ export default async function CampaignDetailPage({
     ownerVisibilityScope(aiPrompts.ownerUserId, session!.user),
   ]);
 
-  const [steps, tpls, prompts, stateCounts, enrolled, drafts, campaignActivity] = await Promise.all([
+  const [steps, tpls, prompts, stateCounts, enrolled, drafts] = await Promise.all([
     db.select().from(sequenceSteps).where(eq(sequenceSteps.campaignId, id)).orderBy(asc(sequenceSteps.stepOrder)),
     db.select().from(templates).where(tScope).orderBy(desc(templates.createdAt)),
     db.select().from(aiPrompts).where(pScope).orderBy(desc(aiPrompts.createdAt)),
@@ -104,19 +104,31 @@ export default async function CampaignDetailPage({
       .innerJoin(connections, eq(connections.id, activities.connectionId))
       .where(and(eq(activities.campaignId, id), eq(activities.status, "pending")))
       .limit(50),
-    db
-      .select({
-        connectionId: activities.connectionId,
-        type: activities.type,
-        status: activities.status,
-        content: activities.content,
-        createdAt: activities.createdAt,
-      })
-      .from(activities)
-      .where(and(eq(activities.campaignId, id), inArray(activities.type, ["invite", "message"])))
-      .orderBy(asc(activities.createdAt))
-      .limit(1000),
   ]);
+
+  // Load the send history ONLY for the recipients we're actually showing, so every
+  // row's Sent/timeline is correct (a blanket "oldest 1000" cut off recently-active
+  // people like fresh repliers). Scoped by connectionId → bounded and complete.
+  const shownConnIds = enrolled.map((e) => e.connectionId);
+  const campaignActivity = shownConnIds.length
+    ? await db
+        .select({
+          connectionId: activities.connectionId,
+          type: activities.type,
+          status: activities.status,
+          content: activities.content,
+          createdAt: activities.createdAt,
+        })
+        .from(activities)
+        .where(
+          and(
+            eq(activities.campaignId, id),
+            inArray(activities.type, ["invite", "message"]),
+            inArray(activities.connectionId, shownConnIds),
+          ),
+        )
+        .orderBy(asc(activities.createdAt))
+    : [];
 
   const t = campaign.targeting ?? {};
   const hasIcp =
