@@ -61,7 +61,7 @@ const STEP_INSTRUCTIONS: Record<OutreachStep, string> = {
     "Write a LinkedIn connection request note. Max 300 characters. Personalize the reason for connecting. Do not pitch, mention services, or ask for a meeting.",
   // DM1
   welcome:
-    "They just accepted the connection. Write a warm, human two-sentence opener that nods to their space/segment. No pitch, no mention of services or credentials, no differentiator, and no ask.",
+    "They just accepted the connection. Write a warm, human opener of TWO short sentences, starting with 'Hi <first name>,'. Sentence 1: acknowledge the new connection (e.g. 'glad we're connected' / 'good to connect'). Sentence 2: a light one-line note of what YOU (the sender) do — B2B demand generation — adapted to their segment (B2B marketing leaders / security marketing teams / B2B agencies on demand gen delivery), then a brief 'good to have you in my network.' This is a SELF-INTRODUCTION from the sender. Do NOT compliment, praise, or flatter the recipient or their work/skills. No pitch, no services detail, no credentials, no differentiator, no question, no ask.",
   // DM2 — personalized observation + first differentiator + pain question
   follow_up_1:
     "Open with a research-backed observation about their role, company, or segment. Then weave in EXACTLY ONE differentiator as a natural credential (it explains why you'd notice this), placed after the observation and before the question. End with ONE question that surfaces a pain they'd recognize. No hard pitch.",

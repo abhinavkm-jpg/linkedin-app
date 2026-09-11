@@ -31,7 +31,7 @@ export const STAGE_STARTER_PROMPTS: Record<string, string> = {
   connection_request:
     "Write the invitation note sent before connecting. Max 300 characters. Give one specific, genuine reason to connect based on their role, company, or industry. Do not pitch, mention services, or ask for a meeting.",
   welcome:
-    "DM1. A warm, human two-sentence opener that nods to their space/segment. No pitch, no services, no credentials, no differentiator, no ask. 15-35 words.",
+    "DM1. Two short sentences, starting with 'Hi <first name>,'. Sentence 1 acknowledges the new connection; sentence 2 is a light one-line self-intro of what the sender does (B2B demand gen, adapted to their segment: marketing leaders / security marketing teams / B2B agencies) plus 'good to have you in my network.' A self-introduction, NOT a compliment about them. No pitch, no credentials, no differentiator, no question, no ask. 15-35 words.",
   follow_up_1:
     "DM2. A research-backed observation about their role/company/segment, then weave in EXACTLY ONE differentiator as a natural credential (why you'd notice this), then end with ONE question that surfaces a pain. No hard pitch. 45-65 words.",
   follow_up_2:
