@@ -77,7 +77,7 @@ function activityTone(status: string): string {
   }
 }
 
-type FilterKey = "all" | "contacted" | "replied" | "attention";
+type FilterKey = "all" | "contacted" | "replied" | "completed" | "attention";
 
 const PAGE_SIZE = 20;
 
@@ -104,7 +104,7 @@ export function CampaignRecipients({
   activities: RecipientActivity[];
   stepCount: number;
   /** True totals across ALL enrollments (not just the loaded slice). */
-  counts?: { all: number; contacted: number; replied: number; attention: number };
+  counts?: { all: number; contacted: number; replied: number; completed: number; attention: number };
   totalRecipients?: number;
 }) {
   const [query, setQuery] = useState("");
@@ -152,6 +152,7 @@ export function CampaignRecipients({
         all: enriched.length,
         contacted: enriched.filter((r) => r.contacted).length,
         replied: enriched.filter((r) => r.state === "replied").length,
+        completed: enriched.filter((r) => r.state === "completed").length,
         attention: enriched.filter((r) => r.attention).length,
       },
     [enriched, serverCounts],
@@ -162,6 +163,7 @@ export function CampaignRecipients({
     return enriched.filter((r) => {
       if (filter === "contacted" && !r.contacted) return false;
       if (filter === "replied" && r.state !== "replied") return false;
+      if (filter === "completed" && r.state !== "completed") return false;
       if (filter === "attention" && !r.attention) return false;
       if (q && !`${r.name} ${r.company ?? ""} ${r.headline ?? ""}`.toLowerCase().includes(q))
         return false;
@@ -187,6 +189,7 @@ export function CampaignRecipients({
     { key: "all", label: "All" },
     { key: "contacted", label: "Contacted" },
     { key: "replied", label: "Replied" },
+    { key: "completed", label: "Completed" },
     { key: "attention", label: "Needs attention" },
   ];
 

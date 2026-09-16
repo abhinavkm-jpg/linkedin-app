@@ -223,6 +223,7 @@ export default async function CampaignDetailPage({
             all: enrolledTotal,
             contacted: Number(contacted),
             replied: repliedCount,
+            completed: completedCount,
             attention: attentionCount,
           }}
           recipients={enrolled.map((e) => ({
