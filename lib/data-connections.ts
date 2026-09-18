@@ -186,13 +186,14 @@ export async function getIcpMatches(
     );
   }
 
-  // Title/level exclusion: drop anyone whose role (position/headline) contains an
-  // excluded word — keeps Manager+ marketing, drops Specialists/Coordinators/AEs.
+  // Title/level exclusion: drop anyone whose JOB TITLE contains an excluded word —
+  // matched against the title (position, else headline), never headline chatter, so
+  // excluding "Sales" drops a Sales Director but not a Marketing Director who mentions
+  // sales. Keeps Manager+ marketing, drops Specialists/AEs and off-function leaders.
   const excludeTitles = (targeting.excludeTitleKeywords ?? []).map((t) => t.trim()).filter(Boolean);
   for (const t of excludeTitles) {
-    const pat = `%${t}%`;
     clauses.push(
-      sql`coalesce(${connections.position}, '') not ilike ${pat} and coalesce(${connections.headline}, '') not ilike ${pat}`,
+      sql`coalesce(nullif(${connections.position}, ''), ${connections.headline}) not ilike ${`%${t}%`}`,
     );
   }
 

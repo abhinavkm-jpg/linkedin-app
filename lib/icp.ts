@@ -45,11 +45,13 @@ export function connectionMatchesIcp(
     const hay = `${conn.company ?? ""} ${conn.enrichedText ?? ""}`.toLowerCase();
     if (excludeCompanies.some((c) => hay.includes(c))) return false;
   }
-  // Title/level exclusion: drop anyone whose ROLE contains an excluded word
-  // (e.g. Specialist, Coordinator, Account Executive → keeps Manager+ marketing).
+  // Title/level exclusion: drop anyone whose JOB TITLE contains an excluded word
+  // (e.g. Specialist, Account Executive, Sales, Engineering). Matched against the
+  // title (position, else headline) — never headline chatter — so excluding "Sales"
+  // drops a Sales Director but not a Marketing Director who mentions sales.
   if (excludeTitles.length > 0) {
-    const roleHay = `${conn.position ?? ""} ${conn.headline ?? ""}`.toLowerCase();
-    if (excludeTitles.some((t) => roleHay.includes(t))) return false;
+    const title = (conn.position?.trim() ? conn.position : conn.headline ?? "").toLowerCase();
+    if (excludeTitles.some((t) => title.includes(t))) return false;
   }
 
   if (keywords.length === 0 && countries.length === 0 && tags.length === 0) return true;
