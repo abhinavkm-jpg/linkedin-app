@@ -14,7 +14,8 @@ import { COUNTRIES, nameForCode, toCode } from "@/lib/countries";
 import type { CampaignTargeting } from "@/db/schema";
 
 const TITLE_PRESETS = [
-  "Manager",
+  "Marketing Manager",
+  "Campaign Manager",
   "Director",
   "VP",
   "Head of",

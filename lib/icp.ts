@@ -55,11 +55,12 @@ export function connectionMatchesIcp(
   if (keywords.length === 0 && countries.length === 0 && tags.length === 0) return true;
 
   if (keywords.length > 0) {
-    // Title keywords match the ROLE (headline + position) only, not the whole
-    // enriched blob — so an incidental keyword in someone's About/history doesn't
-    // qualify an off-function person.
-    const haystack = `${conn.headline ?? ""} ${conn.position ?? ""}`.toLowerCase();
-    if (!keywords.some((kw) => haystack.includes(kw))) return false;
+    // Match against the actual JOB TITLE: the position when we have it, else the
+    // headline (un-enriched rows). This keeps the FUNCTION honest — a "Marketing
+    // Manager" matches, but an "Account Manager" whose headline merely mentions
+    // marketing does not qualify.
+    const title = (conn.position?.trim() ? conn.position : conn.headline ?? "").toLowerCase();
+    if (!keywords.some((kw) => title.includes(kw))) return false;
   }
 
   if (countries.length > 0) {

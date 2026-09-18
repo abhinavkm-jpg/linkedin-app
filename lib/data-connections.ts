@@ -137,14 +137,15 @@ export async function getIcpMatches(
 
   const keywords = (targeting.titleKeywords ?? []).map((k) => k.trim()).filter(Boolean);
   if (keywords.length > 0) {
-    // Title keywords match the ROLE (position + headline) — not the whole enriched
-    // blob (About/company/history) — so a keyword mentioned incidentally in someone's
-    // About doesn't pull in an off-function person.
+    // Match the keyword against the actual JOB TITLE: the position when we have it,
+    // else the headline (for un-enriched rows). This keeps the FUNCTION honest — a
+    // "Marketing Manager" matches, but an "Account Manager" whose headline merely
+    // mentions marketing does not.
     const kwClause = or(
-      ...keywords.flatMap((kw) => [
-        ilike(connections.position, `%${kw}%`),
-        ilike(connections.headline, `%${kw}%`),
-      ]),
+      ...keywords.map(
+        (kw) =>
+          sql`coalesce(nullif(${connections.position}, ''), ${connections.headline}) ilike ${`%${kw}%`}`,
+      ),
     );
     if (kwClause) clauses.push(kwClause);
   }
