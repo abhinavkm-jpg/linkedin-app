@@ -336,6 +336,12 @@ export type CampaignTargeting = {
   excludeCompanies?: string[];
   /** Title/level words to exclude — anyone whose title matches (contains) any is dropped (e.g. Specialist, Coordinator, Account Executive to keep only Manager+ / marketing). */
   excludeTitleKeywords?: string[];
+  /**
+   * Segments (segmentVertical values, e.g. "agency") whose LEADERSHIP-level people
+   * qualify even without a marketing keyword — because at an agency the owner/MD is
+   * the buyer regardless of function. Only applies to classified connections.
+   */
+  leadershipSegments?: string[];
 };
 
 export const campaigns = pgTable("campaigns", {

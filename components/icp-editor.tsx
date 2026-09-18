@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ChipMultiSelect } from "@/components/chip-multiselect";
 import { updateCampaign } from "@/app/(dashboard)/campaigns/actions";
 import { COUNTRIES, nameForCode, toCode } from "@/lib/countries";
@@ -146,11 +147,21 @@ export function IcpEditor({
   const [excludeTitleKeywords, setExcludeTitleKeywords] = useState<string[]>(
     targeting.excludeTitleKeywords ?? [],
   );
+  const [agencyLeaders, setAgencyLeaders] = useState<boolean>(
+    (targeting.leadershipSegments ?? []).includes("agency"),
+  );
 
   function save() {
     start(async () => {
       await updateCampaign(campaignId, {
-        targeting: { titleKeywords, countries, tags, excludeCompanies, excludeTitleKeywords },
+        targeting: {
+          titleKeywords,
+          countries,
+          tags,
+          excludeCompanies,
+          excludeTitleKeywords,
+          leadershipSegments: agencyLeaders ? ["agency"] : [],
+        },
       });
       toast.success("ICP saved");
       router.refresh();
@@ -219,6 +230,25 @@ export function IcpEditor({
             Drops anyone whose job title contains one of these, so you keep Manager+ marketing and
             skip junior/IC or off-function roles (e.g. Specialist, Coordinator, Account Executive).
           </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <Checkbox
+              checked={agencyLeaders}
+              onCheckedChange={(v) => setAgencyLeaders(v === true)}
+              className="mt-0.5"
+            />
+            <span className="text-sm">
+              Include agency owners &amp; leaders
+              <span className="block text-xs text-muted-foreground">
+                Also enroll leadership at marketing/creative agencies (Founder, Owner, CEO,
+                Managing Director, Partner, VP, Director, Head of) even without a marketing
+                keyword in their title — at an agency the owner is the buyer. Applies to
+                connections classified as <span className="font-medium">agency</span>.
+              </span>
+            </span>
+          </label>
         </div>
 
         <div className="flex items-center gap-3">

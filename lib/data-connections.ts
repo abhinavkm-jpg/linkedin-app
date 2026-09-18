@@ -20,6 +20,7 @@ import { db } from "@/db";
 import { connections, enrollments, chats, type Connection, type CampaignTargeting } from "@/db/schema";
 import { toCode } from "@/lib/countries";
 import { accountScope } from "@/lib/access";
+import { LEADERSHIP_TITLE_WORDS } from "@/lib/icp";
 
 export interface ConnectionFilters {
   accountId?: string;
@@ -141,13 +142,23 @@ export async function getIcpMatches(
     // else the headline (for un-enriched rows). This keeps the FUNCTION honest — a
     // "Marketing Manager" matches, but an "Account Manager" whose headline merely
     // mentions marketing does not.
-    const kwClause = or(
-      ...keywords.map(
-        (kw) =>
-          sql`coalesce(nullif(${connections.position}, ''), ${connections.headline}) ilike ${`%${kw}%`}`,
-      ),
-    );
-    if (kwClause) clauses.push(kwClause);
+    const title = sql`coalesce(nullif(${connections.position}, ''), ${connections.headline})`;
+    const kwClause = or(...keywords.map((kw) => sql`${title} ilike ${`%${kw}%`}`));
+
+    // Leadership-segment bypass: at an agency the owner/MD/partner is the buyer
+    // regardless of function, so a leadership title qualifies without a marketing
+    // keyword (only for classified rows in the named segments).
+    const leadershipSegments = (targeting.leadershipSegments ?? []).map((s) => s.trim()).filter(Boolean);
+    if (kwClause && leadershipSegments.length > 0) {
+      const leaderTitle = or(
+        ...LEADERSHIP_TITLE_WORDS.map((w) => sql`${title} ilike ${`%${w}%`}`),
+      );
+      const agencyLeader = and(inArray(connections.segmentVertical, leadershipSegments), leaderTitle);
+      const combined = or(kwClause, agencyLeader);
+      if (combined) clauses.push(combined);
+    } else if (kwClause) {
+      clauses.push(kwClause);
+    }
   }
 
   // Match by ISO code (targeting may hold names, codes, or variants).

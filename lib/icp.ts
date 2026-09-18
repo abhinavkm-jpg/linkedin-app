@@ -1,6 +1,33 @@
 import type { Connection, CampaignTargeting } from "@/db/schema";
 import { toCode } from "@/lib/countries";
 
+/**
+ * Leadership-level title words. For `leadershipSegments` (e.g. agencies), a person
+ * whose title contains one of these qualifies even without a marketing keyword —
+ * the owner/MD/partner is the buyer regardless of function. Deliberately excludes
+ * CTO/CFO/engineering (off-function even at an agency).
+ */
+export const LEADERSHIP_TITLE_WORDS = [
+  "founder",
+  "co-founder",
+  "cofounder",
+  "owner",
+  "ceo",
+  "chief executive",
+  "chief marketing",
+  "cmo",
+  "president",
+  "managing director",
+  "managing partner",
+  "partner",
+  "principal",
+  "vp",
+  "vice president",
+  "head of",
+  "director",
+  "general manager",
+];
+
 /** Pick the connection's current role (else the most recent) from work experience. */
 export function pickLatestJob(
   workExperience: Array<{
@@ -26,7 +53,7 @@ export function pickLatestJob(
 export function connectionMatchesIcp(
   conn: Pick<
     Connection,
-    "headline" | "position" | "company" | "locationCountry" | "locationCountryCode" | "tags" | "enrichedText"
+    "headline" | "position" | "company" | "locationCountry" | "locationCountryCode" | "tags" | "enrichedText" | "segmentVertical"
   >,
   targeting: CampaignTargeting,
 ): boolean {
@@ -62,7 +89,16 @@ export function connectionMatchesIcp(
     // Manager" matches, but an "Account Manager" whose headline merely mentions
     // marketing does not qualify.
     const title = (conn.position?.trim() ? conn.position : conn.headline ?? "").toLowerCase();
-    if (!keywords.some((kw) => title.includes(kw))) return false;
+    const byKeyword = keywords.some((kw) => title.includes(kw));
+    // Leadership-segment bypass: an agency owner/MD/partner is a buyer regardless
+    // of function, so a leadership title qualifies without a marketing keyword.
+    const leadershipSegments = (targeting.leadershipSegments ?? []).map((s) => s.trim()).filter(Boolean);
+    const byLeadership =
+      !byKeyword &&
+      !!conn.segmentVertical &&
+      leadershipSegments.includes(conn.segmentVertical) &&
+      LEADERSHIP_TITLE_WORDS.some((w) => title.includes(w));
+    if (!byKeyword && !byLeadership) return false;
   }
 
   if (countries.length > 0) {
@@ -88,7 +124,8 @@ export function hasIcp(targeting: CampaignTargeting): boolean {
       (targeting.countries?.length ?? 0) +
       (targeting.tags?.length ?? 0) +
       (targeting.excludeCompanies?.length ?? 0) +
-      (targeting.excludeTitleKeywords?.length ?? 0) >
+      (targeting.excludeTitleKeywords?.length ?? 0) +
+      (targeting.leadershipSegments?.length ?? 0) >
     0
   );
 }
