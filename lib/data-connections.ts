@@ -185,6 +185,16 @@ export async function getIcpMatches(
     );
   }
 
+  // Title/level exclusion: drop anyone whose role (position/headline) contains an
+  // excluded word — keeps Manager+ marketing, drops Specialists/Coordinators/AEs.
+  const excludeTitles = (targeting.excludeTitleKeywords ?? []).map((t) => t.trim()).filter(Boolean);
+  for (const t of excludeTitles) {
+    const pat = `%${t}%`;
+    clauses.push(
+      sql`coalesce(${connections.position}, '') not ilike ${pat} and coalesce(${connections.headline}, '') not ilike ${pat}`,
+    );
+  }
+
   // Per-campaign dedup: only when the campaign wants unique contacts.
   if (opts.excludeCampaignId && opts.dedupe !== false) {
     clauses.push(

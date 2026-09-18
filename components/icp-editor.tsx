@@ -142,11 +142,14 @@ export function IcpEditor({
   const [excludeCompanies, setExcludeCompanies] = useState<string[]>(
     targeting.excludeCompanies ?? [],
   );
+  const [excludeTitleKeywords, setExcludeTitleKeywords] = useState<string[]>(
+    targeting.excludeTitleKeywords ?? [],
+  );
 
   function save() {
     start(async () => {
       await updateCampaign(campaignId, {
-        targeting: { titleKeywords, countries, tags, excludeCompanies },
+        targeting: { titleKeywords, countries, tags, excludeCompanies, excludeTitleKeywords },
       });
       toast.success("ICP saved");
       router.refresh();
@@ -200,6 +203,20 @@ export function IcpEditor({
           <p className="text-xs text-muted-foreground">
             Anyone whose company matches one of these is never enrolled or messaged (matches a
             partial name, e.g. &ldquo;Machintel&rdquo; also excludes &ldquo;Machintel Inc&rdquo;).
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Exclude titles / levels (optional)</Label>
+          <ChipMultiSelect
+            value={excludeTitleKeywords}
+            onChange={setExcludeTitleKeywords}
+            presets={["Specialist", "Coordinator", "Associate", "Analyst", "Intern", "Assistant", "Account Executive", "Trainee"]}
+            placeholder="Add a title/level word to exclude…"
+          />
+          <p className="text-xs text-muted-foreground">
+            Drops anyone whose job title contains one of these, so you keep Manager+ marketing and
+            skip junior/IC or off-function roles (e.g. Specialist, Coordinator, Account Executive).
           </p>
         </div>
 

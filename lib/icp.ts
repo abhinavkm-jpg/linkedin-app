@@ -36,12 +36,20 @@ export function connectionMatchesIcp(
   const excludeCompanies = (targeting.excludeCompanies ?? [])
     .map((c) => c.trim().toLowerCase())
     .filter(Boolean);
+  const excludeTitles = (targeting.excludeTitleKeywords ?? [])
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean);
 
-  // Exclusion always applies (even with no inclusion criteria): drop anyone whose
-  // company matches an excluded name.
+  // Exclusions always apply (even with no inclusion criteria).
   if (excludeCompanies.length > 0) {
     const hay = `${conn.company ?? ""} ${conn.enrichedText ?? ""}`.toLowerCase();
     if (excludeCompanies.some((c) => hay.includes(c))) return false;
+  }
+  // Title/level exclusion: drop anyone whose ROLE contains an excluded word
+  // (e.g. Specialist, Coordinator, Account Executive → keeps Manager+ marketing).
+  if (excludeTitles.length > 0) {
+    const roleHay = `${conn.position ?? ""} ${conn.headline ?? ""}`.toLowerCase();
+    if (excludeTitles.some((t) => roleHay.includes(t))) return false;
   }
 
   if (keywords.length === 0 && countries.length === 0 && tags.length === 0) return true;
@@ -76,7 +84,8 @@ export function hasIcp(targeting: CampaignTargeting): boolean {
     (targeting.titleKeywords?.length ?? 0) +
       (targeting.countries?.length ?? 0) +
       (targeting.tags?.length ?? 0) +
-      (targeting.excludeCompanies?.length ?? 0) >
+      (targeting.excludeCompanies?.length ?? 0) +
+      (targeting.excludeTitleKeywords?.length ?? 0) >
     0
   );
 }

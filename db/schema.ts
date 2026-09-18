@@ -334,6 +334,8 @@ export type CampaignTargeting = {
   relationshipStatuses?: string[];
   /** Companies to exclude — anyone whose company matches (contains) any of these is never enrolled/messaged. */
   excludeCompanies?: string[];
+  /** Title/level words to exclude — anyone whose title matches (contains) any is dropped (e.g. Specialist, Coordinator, Account Executive to keep only Manager+ / marketing). */
+  excludeTitleKeywords?: string[];
 };
 
 export const campaigns = pgTable("campaigns", {
